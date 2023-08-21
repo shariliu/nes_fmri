@@ -70,10 +70,5 @@ ROI parcels for this project can be found at https://osf.io/tyh5b. De-faced brai
 │   ├── analysis_scripts
 │   └── experiment_scripts
 ├── readme.md
-├── roi_parcels
-│   ├── README
-│   ├── domain_specific_data_driven_parcels
-│   ├── md_parcels
-│   └── visual_parcels
 └── saxelab_fmri_pipeline.md
 ```
