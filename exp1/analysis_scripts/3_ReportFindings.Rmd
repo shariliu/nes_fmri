@@ -1,0 +1,523 @@
+---
+title: "Violations of physical and psychological expectations in the human adult brain - Reporting Results from Experiments 1 and 2"
+author: "Shari Liu"
+date: '2023-08-04'
+output:
+  html_document:
+    code_folding: show
+  # pdf_document:
+  #   includes:
+  #     in_header: wrap-code.tex
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    number_sections: yes
+    theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(pacman)
+pacman::p_load(tidyverse,
+               conflicted,
+               here,
+               effsize,
+               ggrepel,
+               patchwork,
+               ggpubr,
+               boot,
+               nptest,
+               boot.pval,
+               cowplot,
+               DT
+)
+
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("rename", "dplyr")
+conflict_prefer("arrange", "dplyr")
+
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("lmer", "lmerTest")
+conflict_prefer("here", "here")
+
+source(here(
+            "helper_funs.R"))
+
+sessionInfo()
+```
+
+
+# Read in results, Exp 1
+```{r}
+exp1_modelsummaries_allregions <- read_rds(path = here("outputs/univariate_results/modelsummaries_allregions_alltopN.Rds"))
+
+exp1_modelsummary_habituation <- read_rds(path = here("outputs/univariate_results/habituation_over_runs_modelsummary.Rds"))
+
+exp1_modelsummary_habituation_byrun <- read_rds(path = here("outputs/univariate_results/habituation_over_runs_perrun.Rds"))
+
+exp1_contrasts_LSMG <- read_rds(path = here("outputs/univariate_results/LSMG_results_bydomain_top100.Rds"))
+
+```
+
+```{r}
+exp1_MVPA_results_allregions <- read_rds( here("outputs/multivariate_results/study1_MVPA_results_allregions_top100.Rds")) %>%
+  filter(distance_metric == "euclidean")
+
+exp1_MPVA_manyregions_results <- read_rds( here("outputs/multivariate_results/study1_MVPA_manyregions_observed_cor.Rds")) 
+
+exp1_MVPA_manyregions_perm_results_ds <- read_rds(here("outputs/multivariate_results/study1_MVPA_dsregions_summary.Rds"))
+
+exp1_MVPA_manyregions_perm_boot_ds <- read_rds(here("outputs/multivariate_results/study1_MVPA_dsregions_4000perms_confirmatory.Rds"))
+
+exp1_MVPA_manyregions_perm_results_dg <- read_rds(here("outputs/multivariate_results/study1_MVPA_dgregions_summary.Rds"))
+
+exp1_MVPA_manyregions_perm_boot_dg <- read_rds(here("outputs/multivariate_results/study1_MVPA_dgregions_4000perms_confirmatory.Rds"))
+
+```
+
+```{r}
+exp1_MVPA_manyregions_perm_boot_ds_CI <- round(boot.ci(exp1_MVPA_manyregions_perm_boot_ds, type = "perc", conf = 0.95)[[4]][4:5],3)
+
+exp1_MVPA_manyregions_perm_boot_ds_pval <- round(boot.pval(exp1_MVPA_manyregions_perm_boot_ds),3)
+```
+
+```{r}
+exp1_MVPA_manyregions_perm_boot_dg_CI <- round(boot.ci(exp1_MVPA_manyregions_perm_boot_dg, type = "perc", conf = 0.95)[[4]][4:5],3)
+
+exp1_MVPA_manyregions_perm_boot_dg_pval <- round(boot.pval(exp1_MVPA_manyregions_perm_boot_dg),3)
+```
+
+```{r}
+exp1_univar_manyregions_results <- read_rds(here("outputs/univariate_results/study1_univar_manyregions_observed_cor.Rds"))
+
+exp1_univar_manyregions_perm_results_ds <- read_rds(here("outputs/univariate_results/study1_univariate_dsregions_summary.Rds"))
+
+exp1_univar_manyregions_perm_boot_ds <- read_rds(here("outputs/univariate_results/study1_univariate_dsregions_4000perms_confirmatory.Rds"))
+
+exp1_univar_manyregions_perm_results_dg <- read_rds(here("outputs/univariate_results/study1_univariate_dgregions_summary.Rds"))
+
+exp1_univar_manyregions_perm_boot_dg <- read_rds(here("outputs/univariate_results/study1_univariate_dgregions_4000perms_confirmatory.Rds"))
+
+```
+
+```{r}
+exp1_univar_manyregions_perm_boot_ds_CI <- round(boot.ci(exp1_univar_manyregions_perm_boot_ds, type = "perc", conf = 0.95)[[4]][4:5],3)
+
+exp1_univar_manyregions_perm_boot_ds_pval <- round(boot.pval(exp1_univar_manyregions_perm_boot_ds),3)
+```
+
+```{r}
+exp1_univar_manyregions_perm_boot_dg_CI <- round(boot.ci(exp1_univar_manyregions_perm_boot_dg, type = "perc", conf = 0.95)[[4]][4:5],3)
+
+exp1_univar_manyregions_perm_boot_dg_pval <- round(boot.pval(exp1_univar_manyregions_perm_boot_dg),3)
+```
+
+
+# Read in results, Exp 2
+```{r}
+exp2_modelsummaries_allregions <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/univar_results_alltopN_allregions.Rds"))
+
+exp2_modelsummary_habituation <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/habituation_over_runs_modelsummary.Rds"))
+
+exp2_modelsummary_habituation_byrun <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/habituation_over_runs_perrun.Rds"))
+
+exp2_contrasts_LSMG <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/LSMG_results_bydomain_top100.Rds"))
+```
+
+```{r}
+exp2_APC_SMG_overlap <- readRDS( here("../../exp2/analysis_scripts/outputs/univariate_results/APC_SMG_overlap_results.Rds"))
+```
+
+
+```{r}
+exp2_psych_env_modelsummaries_allregions <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/univar_results_psych-env_allregions_alltopN.Rds"))
+
+exp2_psych_env_habituation_modelsummary <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/habituation_over_runs_psych-env_modelsummary.Rds"))
+
+exp2_psych_env_habituation_perrun <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/habituation_over_runs_psych-env_perrun.Rds"))
+
+exp2_modelsummary_runs12_VOEselect <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/univar_results_top100_VOE-extract_runs12.Rds"))
+```
+
+```{r}
+exp2_MVPA_results_allregions <- read_rds( here("../../exp2/analysis_scripts/outputs/multivariate_results/study2_MVPA_results_betweenruns12.Rds")) %>%
+  filter(distance_metric == "euclidean")
+
+exp2_MVPA_results_allregions_withinrun <- read_rds( here("../../exp2/analysis_scripts/outputs/multivariate_results/study2_MVPA_results_across_vs_within_run.Rds")) %>%
+  filter(distance_metric == "euclidean")
+
+exp2_MVPA_manyregions_results <- read_rds( here("../../exp2/analysis_scripts/outputs/multivariate_results/study2_MVPA_manyregions_observed_cor.Rds")) 
+
+exp2_MVPA_manyregions_perm_results_ds <- read_rds(here("../../exp2/analysis_scripts/outputs/multivariate_results/study2_MVPA_dsregions_summary.Rds"))
+
+exp2_MVPA_manyregions_perm_boot_ds <- read_rds(here("../../exp2/analysis_scripts/outputs/multivariate_results/study2_MVPA_dsregions_4000perms_confirmatory.Rds"))
+
+exp2_MVPA_manyregions_perm_results_dg <- read_rds(here("../../exp2/analysis_scripts/outputs/multivariate_results/study2_MVPA_dgregions_summary.Rds"))
+
+exp2_MVPA_manyregions_perm_boot_dg <- read_rds(here("../../exp2/analysis_scripts/outputs/multivariate_results/study2_MVPA_dgregions_4000perms_confirmatory.Rds"))
+
+```
+
+```{r}
+exp2_MVPA_manyregions_perm_boot_ds_CI <- round(boot.ci(exp2_MVPA_manyregions_perm_boot_ds, type = "perc", conf = 0.95)[[4]][4:5],3)
+
+exp2_MVPA_manyregions_perm_boot_ds_pval <- round(boot.pval(exp2_MVPA_manyregions_perm_boot_ds),3)
+```
+
+```{r}
+exp2_MVPA_manyregions_perm_boot_dg_CI <- round(boot.ci(exp2_MVPA_manyregions_perm_boot_dg, type = "perc", conf = 0.95)[[4]][4:5],3)
+
+exp2_MVPA_manyregions_perm_boot_dg_pval <- round(boot.pval(exp2_MVPA_manyregions_perm_boot_dg),3)
+```
+
+```{r}
+exp2_univar_manyregions_results <- read_rds(here("../../exp2/analysis_scripts/outputs/univariate_results/study2_univar_manyregions_observed_cor.Rds"))
+
+
+exp2_univar_manyregions_perm_results_ds <- read_rds(here("../../exp2/analysis_scripts/outputs/univariate_results/study2_univariate_dsregions_summary.Rds"))
+
+exp2_univar_manyregions_perm_boot_ds <- read_rds(here("../../exp2/analysis_scripts/outputs/univariate_results/study2_univariate_dsregions_4000perms_confirmatory.Rds"))
+
+exp2_univar_manyregions_perm_results_dg <- read_rds(here("../../exp2/analysis_scripts/outputs/univariate_results/study2_univariate_dgregions_summary.Rds"))
+
+exp2_univar_manyregions_perm_boot_dg <- read_rds(here("../../exp2/analysis_scripts/outputs/univariate_results/study2_univariate_dgregions_4000perms_confirmatory.Rds"))
+
+```
+
+```{r}
+exp2_univar_manyregions_perm_boot_ds_CI <- round(boot.ci(exp2_univar_manyregions_perm_boot_ds, type = "perc", conf = 0.95)[[4]][4:5],3)
+
+exp2_univar_manyregions_perm_boot_ds_pval <- round(boot.pval(exp2_univar_manyregions_perm_boot_ds),3)
+```
+
+```{r}
+exp2_univar_manyregions_perm_boot_dg_CI <- round(boot.ci(exp2_univar_manyregions_perm_boot_dg, type = "perc", conf = 0.95)[[4]][4:5],3)
+
+exp2_univar_manyregions_perm_boot_dg_pval <- round(boot.pval(exp2_univar_manyregions_perm_boot_dg),3)
+```
+
+```{r}
+exp2_modelsummary_singlebetas <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/univar_results_top100_singlebetas_psych_phys.Rds"))
+
+exp2_modelsummary_singlebetas_visualstats <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/univar_results_top100_singlebetas_psych_phys_visstats.Rds"))
+```
+
+# Results from Main Text
+## Univariate results 
+
+### Physics ROIs
+
+Our domain-specific physics regions were left and right supramarginal gyrus (SMG). In Experiment 1, we first confirmed the selectivity of these regions for physical over social stimuli:  Both left and right SMG responded preferentially to physical events (left SMG: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "supramarginal_L", effect == "domain"), 3, 2)`; right SMG: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "supramarginal_R", effect == "domain"), 3, 2)`) . Then, we conducted the key test for physical prediction error. We found that left SMG showed a VOE response that differed across domains  (`r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "supramarginal_L", effect == "event:domain"), 3, 2)`). LSMG responded more to unexpected than expected physical events (`r report_contrasts(exp1_contrasts_LSMG %>% filter(domain == "physics"), 3, 2)`, but did not distinguish between unexpected and expected psychological events (`r report_contrasts(exp1_contrasts_LSMG %>% filter(domain == "psychology"), 3, 2)`). RSMG did not show a main effect of event (`r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "supramarginal_R", effect == "event"), 3, 2)`), nor an interaction between event and domain (`r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "supramarginal_R", effect == "event:domain"), 3, 2)`).
+
+
+We then pre-registered the prediction for domain-specific prediction error in left SMG in Experiment 2. We again found that left SMG showed a signature of domain-specific prediction error: an interaction between domain and event (`r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "supramarginal_L", effect == "domain"), 3, 2)`), with greater responses for unexpected than expected physical events `r report_contrasts(exp2_contrasts_LSMG %>% filter(domain == "physics"), 3, 2)`), and no significant VOE effect for psychological events (`r report_contrasts(exp2_contrasts_LSMG %>% filter(domain == "psychology"), 3, 2)`). Right SMG showed a marginally higher response to unexpected events regardless of domain (`r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "supramarginal_R", effect == "event"), 3, 2)`), with no interaction between event and domain (`r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "supramarginal_R", effect == "event:domain"), 3, 2)`). Like in Experiment 1, both left and right SMG responded more to physical than psychological events (left SMG: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "supramarginal_L", effect == "domain"), 3, 2)`; right SMG: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "supramarginal_R", effect == "domain"), 3, 2)`)
+
+### Psychology ROIs
+
+Our domain-specific psychology regions were left and right superior temporal sulcus (STS). In Experiment 1, we found that these regions respond more to psychological than physical events (left STS: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "superiortemporal_L", effect == "domain"), 3, 2)`; right STS: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run2", ROI == "superiortemporal_R", effect == "domain"), 3, 2)`).  However, we did not find evidence for distinctively psychological prediction error–an interaction between event and domain– in these regions (left STS: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "superiortemporal_L", effect == "event:domain"), 3, 2)`; right STS: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "superiortemporal_R", effect == "event:domain"), 3, 2)`) Instead, we found that the right STS responded more to unexpected events from both domains (right STS: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "superiortemporal_R", effect == "event"), 3, 2)` whereas the left STS did not show a significant main effect of event (`r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "superiortemporal_L", effect == "event"), 3, 2)`) 
+
+In planning for Experiment 2, in which we plausibly had greater statistical power (bigger sample size, more stimuli, more runs of data), we considered two alternative hypotheses: that the STS would show domain-specific psychological prediction error, or that the STS encodes both physical and psychological information relevant for action understanding, which would lead to a main effect of domain, and of event, but no interaction across them. In the confirmatory analyses of Experiment 2, we found support for neither hypothesis. Both left and right STS responded more to psychological events (left STS: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "superiortemporal_L", effect == "domain"), 3, 2)`; right STS: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "superiortemporal_R", effect == "domain"), 3, 2)`). However, neither left nor right STS responded more to unexpected than expected events (left STS: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "superiortemporal_L", effect == "event"), 3, 2)`; right STS: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "superiortemporal_R", effect == "event"), 3, 2)`), and there was no interaction between domain and event in these regions (left STS: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "superiortemporal_L", effect == "event:domain"), 3, 2)`; right STS: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "superiortemporal_R", effect == "event:domain"), 3, 2)`).  Thus, we did not find consistent evidence for domain-general or domain-specific psychological prediction error in our focal psychology ROIs.
+
+Next, we tested for evidence for domain-general processing of violations of any expectation, in cortical regions associated with visual processing and endogenous attention.
+
+
+### Early visual ROIs
+
+In Experiment 1, we found via exploratory analyses that neither left nor right V1 responded more to unexpected than expected events (left V1: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "V1_L", effect == "event"), 3, 2)`; right V1:  `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "V1_R", effect == "event"), 3, 2)`). Both left and right V1 responded more to psychological events (left V1: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "V1_L", effect == "domain"), 3, 2)`; right V1 `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "V1_R", effect == "domain"), 3, 2)`). 
+
+In Experiment 2, we found again that neither bilateral V1 and bilateral MT responded differently to unexpected and expected events  (V1: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "V1_bilateral", effect == "event"), 3, 2)`; MT: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "MT_bilateral", effect == "event"), 3, 2)`). Both bilateral V1 and bilateral MT responded more to physical than psychological events (the opposite effect from that in Experiment 1) (V1: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "V1_bilateral", effect == "domain"), 3, 2)`; MT: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "MT_bilateral", effect == "domain"), 3, 2)`). The higher average response to physical events in MT appears to be driven by variance in low-level statistics in the stimuli (see SI for details); after controlling for these features, bilateral MTV1 no longer showed a significant domain preference (`r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "MT_bilateral"), 3, 2)`). V1 continued to show a preference for physical events, after accounting for the same features (`r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "V1_bilateral"), 3, 2)`).
+
+In sum, we consistently found no VOE effects in early visual regions. 
+
+### Goal-directed attention ROIs
+Lastly, we tested the hypothesis that the VOE response is (also) supported by domain-general endogenous attention by studying responses in two multiple demand regions: the right frontal cortex (RFC) and bilateral anterior parietal cortex (APC).
+
+In Experiment 1, we found via exploratory analyses that right frontal cortex responded more to unexpected than expected events (main effect of event: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "precentral_inferiorfrontal_R", effect == "event"), 3, 2)`). This region did not respond preferentially to physical or psychological events (main effect of domain: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "precentral_inferiorfrontal_R", effect == "domain"), 3, 2)`), and there was no interaction between event and domain (`r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "precentral_inferiorfrontal_R", effect == "event:domain"), 3, 2)`). We found that bilateral anterior parietal cortex also responded more to unexpected than expected events (main effect of event: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "antParietal_bilateral", effect == "event"), 3, 2)`), responded more to physical than psychological events (main effect of domain, run 1: `r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "antParietal_bilateral", effect == "domain"), 3, 2)`), with no interaction between domain and event (`r report(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI == "antParietal_bilateral", effect == "event:domain"), 3, 2)`).
+
+We then pre-registered these same predictions in Experiment 2. We found that both RFC and APC responded more to unexpected than expected events (RFC: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "precentral_inferiorfrontal_R", effect == "event"), 3, 2)`; APC: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "antParietal_bilateral", effect == "event"), 3, 2)`), with no intersection between domain and event (RFC: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "precentral_inferiorfrontal_R", effect == "event:domain"), 3, 2)`; APC: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "antParietal_bilateral", effect == "event:domain"), 3, 2)`). Both RFC and APC responded more to physical than psychological events  (RFC: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "precentral_inferiorfrontal_R", effect == "domain"), 3, 2)`; APC: `r report(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "antParietal_bilateral", effect == "domain"), 3, 2)`).
+
+
+
+
+### Overlap between MD and physics ROIs
+The search space for a focal multiple demand ROI, the bilateral anterior parietal cortex (APC), substantially overlaps with the search spaces for 2 physical ROIs, the left and right supramarginal gyrus (SMG).  How much do these selected ROIs fromExperiment 2 , that were selected based on tasks targeting two distinct mental processes overlap with each other? We found that the median Dice’s coefficient between the bilateral APC and either the left or right SMG was `r exp2_APC_SMG_overlap %>% filter(MD_hemisphere == "bilateral") %>% select(median_DC) %>% as.numeric()` (mean: `r exp2_APC_SMG_overlap %>% filter(MD_hemisphere == "bilateral") %>% select(mean_DC) %>% as.numeric()`, range: `r exp2_APC_SMG_overlap %>% filter(MD_hemisphere == "bilateral") %>% select(range_low) %>% as.numeric()`-`r exp2_APC_SMG_overlap %>% filter(MD_hemisphere == "bilateral") %>% select(range_high) %>% as.numeric()`). For the majority of selected physics ROIs in participants (73%; 47/64; two per participant), there was no overlap at all with ROIs that were maximally selective for attentional demand. See Figure SX and Methods for more details. 
+
+## VOE towards physically surprising outcomes, generated by an agent (exploratory)
+
+How do our focal domain-specific and domain-general regions respond to surprising events involving both agents and objects (psychology-environment scenarios, Figure 1C), wherein a surprising physical outcome is revealed through an agent’s action? To ask this question, we modeled the responses of all the above regions in the physical-environment scenarios as predicted by event (model formula: meanbeta ~ event + (1|subjectID)). When restricting the analysis to data from the first 2 runs, like in our confirmatory analyses in psychology-action and physics events, the only focal ROI that showed a VOE effect was the RSTS (`r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI == "superiortemporal_R", effect == "event"), 3, 2)`)
+
+Further exploratory analyses over all runs of the experiment suggested that many focal ROIs showed strong VOE effects towards these stimuli across runs, including domain-specific ROIs (
+(left SMG: `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "supramarginal_L", effect == "event"), 3, 2)`; right SMG: `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "supramarginal_R", effect == "event"), 3, 2)`; right STS: `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "superiortemporal_R", effect == "event"), 3, 2)`), except for left STS (`r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "superiortemporal_L", effect == "event"), 3, 2)`), and MD ROIs (APC: `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "antParietal_bilateral", effect == "event"), 3, 2)`; RFC: `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "precentral_inferiorfrontal_R", effect == "event"), 3, 2)`), though not early visual regions (bilateral V1: `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "V1_bilateral", effect == "event"), 3, 2)`; bilateral MT: `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "all_runs", ROI == "MT_bilateral", effect == "event"), 3, 2)`). See SI for effects from more regions, as well as findings of VOE effects across individual tasks for all focal regions.
+
+
+## Organization of domain and event effects across many regions
+
+In the univariate analyses over focal regions, we searched for neural VOE effects in regions we believed were most likely to show them, based on the findings of Experiment 1 and prior research. However we also wanted to characterize the responses of regions across the cortex. Therefore, we planned and conducted a series of analyses investigating the organization of event and domain information across 24 domain-general and 18 domain-specific regions. We originally pre-registered multivariate effect sizes as the input to this analysis, but given the lack of reliable multivariate VOE effects, even within domains, we present a similar analysis using univariate event effects below, and report the results of the original analysis in the SI. 
+
+Across both Experiments 1 and 2, we found that information across domain-specific regions–regions studied in prior work as involved in distinctively social or physical computations, and defined based on differential responses to social and physical stimuli– is organized by domain, but not by event. For these regions, the size of a region’s domain effect (psychology vs physics) for expected events strongly predicts the size of the same region’s domain effect for unexpected events (Exp 1: `r report_manyregions(exp1_univar_manyregions_results %>% filter(ROI_domain == "specific"), "domain_within_event", 3)`; Exp 2: `r report_manyregions(exp2_univar_manyregions_results %>% filter(ROI_domain == "specific"), "domain_within_event", 3)`). However, the size of a region’s VOE effect for psychology-action events was weakly anticorrelated with the size of the same region’s VOE effect for physics events, for both experiments (Exp 1: `r report_manyregions(exp1_univar_manyregions_results %>% filter(ROI_domain == "specific"), "event_within_domain", 3)`; Exp 2: `r report_manyregions(exp2_univar_manyregions_results %>% filter(ROI_domain == "specific"), "event_within_domain", 3)`). These two correlations differed significantly from each other (Experiment 1 (95% CI [`r exp1_univar_manyregions_perm_boot_ds_CI`], p = `r exp1_univar_manyregions_perm_boot_ds_pval`); Exp 2: 95% CI [`r exp2_univar_manyregions_perm_boot_ds_CI`], p = `r exp2_univar_manyregions_perm_boot_ds_pval`)).
+
+What about for domain-general regions? These regions were defined based on responses to visual information (V1 and MT) or to a spatial working memory task (MD regions), with no reference to domain information. Even so, we found that these regions were defined by both domain and event information, in both Experiments 1 and 2. In these regions, domain effect sizes for expected events strongly predicted domain effect for unexpected events (Exp 1: `r report_manyregions(exp1_univar_manyregions_results %>% filter(ROI_domain == "general"), "domain_within_event", 3)`; Exp 2: `r report_manyregions(exp2_univar_manyregions_results %>% filter(ROI_domain == "general"), "domain_within_event", 3)`). Furthermore, psychology-action event effects predicted physical event effects (albeit more weakly) (Exp 1: `r report_manyregions(exp1_univar_manyregions_results %>% filter(ROI_domain == "general"), "event_within_domain", 3)`; Exp 2: `r report_manyregions(exp2_univar_manyregions_results %>% filter(ROI_domain == "general"), "event_within_domain", 3)`). These two correlations differed significantly from each other (Experiment 1 (95% CI [`r exp1_univar_manyregions_perm_boot_dg_CI`], p = `r exp1_univar_manyregions_perm_boot_dg_pval`); Exp 2: 95% CI [`r exp2_univar_manyregions_perm_boot_dg_CI`], p = `r exp2_univar_manyregions_perm_boot_dg_pval`)).
+
+Across both Experiments 1-2, the across-region correlation of responses for domains across events was stronger than the correlation of responses for events across domains . Thus, for both putatively domain-general and domain-specific regions, univariate information across regions is organized by domain, more so by event. 
+
+# Results from Methods Section
+
+## VOE Habituation Over Runs (Methods) {.tabset}
+
+### Experiment 1
+In Experiment 1, we selected the focal physics and psychology regions based on group maps showing that STS and SMG responded more to social and physical stimuli, respectively, for both the DOTsloc task, and runs 2-4 of the VOE task. For MD regions, we took the data from runs 2-4 and selected the top 100 voxels (by z statistic) per subject that responded more to unexpected than expected events across domains, and returned their responses in run 1. In this first exploratory study, we reported results from the two MD regions that showed the biggest VOE effect size in run 1, and that appeared in a meta-analysis over regions that encode reward prediction error during learning (Fouragnan et al., 2018), and that are close in proximity to findings from previous research on neural responses to magic tricks (Parris et al., 2009) and curiosity inducing trivia (Kang et al., 2009). See SI for group maps and tables. We pre-registered this selection procedure but due to an error in this analysis, we originally selected partially different MD focal regions than what is reported in this paper. For full transparency, we report the results from these regions in the SI.
+
+In Experiment 1, we checked whether the size of the VOE effect declines over runs, in left and right SMG and STS, where we predicted we would find an effect. The two MD regions were excluded from this analysis because the data used to identify them, from runs 2-4, is non-independent of the data for this analysis. We fit a linear mixed effects model (Bates et al., 2015) including the interaction between run number and event as fixed effects, and subject ID as a random intercept (model formula: `meanbeta ~  extracted_run_number * event + (1|subjectID)`). We then extracted the main effect of event per run using lsmeans()  (Lenth, 2016). We found that whereas there was a significant VOE effect in run 1 (`r report_contrasts(exp1_modelsummary_habituation_byrun %>% filter(extracted_run_number == "run1"), 3, 2)`), this effect was absent in the other runs (run 2: `r report_contrasts(exp1_modelsummary_habituation_byrun %>% filter(extracted_run_number == "run2"), 3, 2)`; run 3: `r report_contrasts(exp1_modelsummary_habituation_byrun %>% filter(extracted_run_number == "run3"), 3, 2)`; run 4: `r report_contrasts(exp1_modelsummary_habituation_byrun %>% filter(extracted_run_number == "run4"), 3, 2)`). Thus, we proceeded with our ssfROI data from just the first VOE run, and pre-registered this analysis procedure as a way to select between including data from all runs, or just runs 1 and 2, in Experiment 2. 
+
+
+```{r}
+exp1_modelsummary_habituation
+exp1_modelsummary_habituation_byrun
+```
+
+### Experiment 2
+We pre-registered the same focal regions for Experiment 2, and defined them using our localizer tasks. We took the top 100 voxels (by z statistic) that responded to physical or social events (DOTSloc; physics and psychology regions), responded more to visual stimuli than rest (spWMloc; bilateral V1), responded more to coherent than incoherent motion (MotionLoc; bilateral MT), and responded more to difficult than easy spatial working memory tasks (spWMloc; MD regions). 
+
+Following our analysis plan, we conducted a manipulation check, asking whether the VOE effect (unexpected > expected) declined across runs in all regions for which we predicted a positive effect (left and right SMG, left and right STS, bilateral APC, right FC). Similarly to Experiment 1, we found that there were marginal or significant event effects in runs 1 and 2 (run 1: `r report_contrasts(exp2_modelsummary_habituation_byrun %>% filter(extracted_run_number == "run1"), 3, 2)`; run 2: `r report_contrasts(exp2_modelsummary_habituation_byrun %>% filter(extracted_run_number == "run2"), 3, 2)`), but no significant event effects in runs 3 or 4 (run 3: `r report_contrasts(exp2_modelsummary_habituation_byrun %>% filter(extracted_run_number == "run3"), 3, 2)`; run 4: `r report_contrasts(exp2_modelsummary_habituation_byrun %>% filter(extracted_run_number == "run4"), 3, 2)`). Thus we followed our plan to restrict all subsequent confirmatory analyses to the first two runs. 
+
+```{r}
+exp2_modelsummary_habituation
+exp2_modelsummary_habituation_byrun
+```
+
+
+# Supplemental Results
+
+## 4. Additional univariate results 
+### Psych-action and physics events, non-focal regions {.tabset}
+
+#### Event effects
+
+Experiment 1
+
+```{r}
+DT::datatable(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", effect == "event", focal_region == 0), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+Experiment 2
+```{r}
+DT::datatable(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", effect == "event", focal_region == 0), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+#### Domain effects, non-focal regions
+
+In both Experiments 1 and 2, both domain-specific and domain-general regions showed a greater response for physical than psychological events, or vice versa, that cleared our stringent significance threshold
+
+In Experiment 1, the regions that responded more to physical events were:
+- Left and right visual medial cortex (physics regions): Left `r report(exp1_modelsummaries_allregions %>% filter(ROI == "vismedial_L", effect == "domain", top_n_voxels == "100", extracted_run_number == "run1"), 3, 2)`. Right: `r report(exp1_modelsummaries_allregions %>% filter(ROI == "vismedial_R", effect == "domain", top_n_voxels == "100", extracted_run_number == "run1"), 3, 2)`.
+- Left and right anterior parietal cortex (physics regions; both are part of our combined bilateral APC): Left `r report(exp1_modelsummaries_allregions %>% filter(ROI == "antParietal_L", effect == "domain", top_n_voxels == "100", extracted_run_number == "run1"), 3, 2)`. Right: `r report(exp1_modelsummaries_allregions %>% filter(ROI == "antParietal_R", effect == "domain", top_n_voxels == "100", extracted_run_number == "run1"), 3, 2)`
+
+
+In Experiment 1, the regions that responded more to psychological events were:
+- Left and right lateral and ventral visual cortex. Left: `r report(exp1_modelsummaries_allregions %>% filter(ROI == "vislateralventral_L", effect == "domain", top_n_voxels == "100", extracted_run_number == "run1"), 3, 2)`. Right: `r report(exp1_modelsummaries_allregions %>% filter(ROI == "vislateralventral_R", effect == "domain", top_n_voxels == "100", extracted_run_number == "run1"), 3, 2)`
+
+
+In Experiment 2, the physics ROIs with the biggest univariate preference for physical events (by effect size) were:
+- Left and right visual medial cortex. Left `r report(exp2_modelsummaries_allregions %>% filter(ROI == "vismedial_L", effect == "domain", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`. Right: `r report(exp2_modelsummaries_allregions %>% filter(ROI == "vismedial_R", effect == "domain", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`.
+- Right superior parietal cortex,  `r report(exp2_modelsummaries_allregions %>% filter(ROI == "supparietal_R", effect == "domain", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`.
+
+In Experiment 2, the MD/early visual ROIs with the biggest univariate preference for physical events (by effect size) were:
+- Right MT, `r report(exp2_modelsummaries_allregions %>% filter(ROI == "MT_R", effect == "domain", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`
+- Right posterior parietal cortex, `r report(exp2_modelsummaries_allregions %>% filter(ROI == "postParietal_R", effect == "domain", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`
+- Right mid parietal cortex, `r report(exp2_modelsummaries_allregions %>% filter(ROI == "midParietal_R", effect == "domain", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`
+
+In Experiment 2, two regions showed a greater response for psychological than physical events. Both were psychology ROIs:
+- Left lateral and ventral visual cortex. Left: `r report(exp2_modelsummaries_allregions %>% filter(ROI == "vislateralventral_L", effect == "domain", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`. 
+- Left MPFC, `r report(exp2_modelsummaries_allregions %>% filter(ROI == "MPFC_L", effect == "domain", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`
+
+
+Experiment 1
+```{r}
+DT::datatable(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", effect == "domain", focal_region == 0), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+Experiment 2
+```{r}
+DT::datatable(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", effect == "domain", focal_region == 0), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+#### Event X Domain interaction, non-focal regions
+
+Experiment 1
+```{r}
+DT::datatable(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", effect == "event:domain", focal_region == 0), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+Experiment 2
+```{r}
+DT::datatable(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", effect == "event:domain", focal_region == 0), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+### Alternative definition of STS
+
+Why did we fail to observe a consistent event effect in left and right STS? One possibility is a conceptual mismatch between the social information evoked by our independent localizer (two dots interacting socially), and the social information evoked by the VOE task (a single agent acting to achieve a physical goal). To test this possibility, we repeated the univariate analysis in left and right STS, except this time, we selected ssfROIs in STS based on the psychological > physical contrast from an independent split of the VOE task (runs 2-4 in Experiment 1, and runs 3-4 in Experiment 2).
+
+In Experiment 2, we found that left and right STS, defined based on a contrast between psychological events, involving instrumental action and purely physical events, showed a reliable preference for psychological events (left STS: `r report(exp2_modelsummary_runs12_VOEselect %>% filter(ROI == "superiortemporal_L", effect == "domain"), 3, 2)`; right STS: `r report(exp2_modelsummary_runs12_VOEselect %>% filter(ROI == "superiortemporal_R", effect == "domain"), 3, 2)`). However, this version of left and right STS did not respond more to unexpected than expected events (left STS: `r report(exp2_modelsummary_runs12_VOEselect %>% filter(ROI == "superiortemporal_L", effect == "event"), 3, 2)`; right STS: `r report(exp2_modelsummary_runs12_VOEselect %>% filter(ROI == "superiortemporal_R", effect == "event"), 3, 2)`), nor an interaction between domain and event (left STS: `r report(exp2_modelsummary_runs12_VOEselect %>% filter(ROI == "superiortemporal_L", effect == "event:domain"), 3, 2)`; right STS: `r report(exp2_modelsummary_runs12_VOEselect %>% filter(ROI == "superiortemporal_R", effect == "event:domain"), 3, 2)`). 
+
+### Visual statistics
+
+To ask whether variability in visual features across events (in terms of low and high spatial frequency information, rectilinearity, curvilinearity, contrast, and luminance) explains our primary VOE findings, we added all of these features as covariates in our model per region (formula: `meanbeta ~ event * domain + normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf + normalized_mean_rect + normalized_mean_curv + (1|subjectID)`). Our original plan was to also model low spatial frequency information, `normalized_mean_lsf`, but this feature was highly collinear with the other predictors in the model. All visual features were z-scored across videos, and the methods for computing them are reported in the Methods.
+
+Each of these features predicted the amplitude of univariate activity in at least one focal region. All of the VOE results in our focal regions (both positive and negative) held taking into account these features:
+- Left and right SMG did not show a main effect of event (LSMG: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event", ROI == "supramarginal_L"), 3, 2)`; RSMG: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event", ROI == "supramarginal_R"), 3, 2)`), but both regions showed an interaction between event and domain, with a greater VOE effect for physical events (LSMG: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event:domain", ROI == "supramarginal_L"), 3, 2)`; RSMG: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event:domain", ROI == "supramarginal_R"), 3, 2)`).
+- Neither left nor right STS showed a main effect of event (LSTS: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event", ROI == "superiortemporal_L"), 3, 2)`; RSTS: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event", ROI == "superiortemporal_R"), 3, 2)`).
+- Neither bilateral V1 and bilateral MT showed a main effect of event (V1: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event", ROI == "V1_bilateral"), 3, 2)`; MT: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event", ROI == "MT_bilateral"), 3, 2)`).
+
+- Both bilateral APC and RFC showed a main effect of event, responding more to unexpected than expected events (APC: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event", ROI == "antParietal_bilateral"), 3, 2)`; RFC: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "event", ROI == "precentral_inferiorfrontal_R"), 3, 2)`).
+
+The domain effects from all domain-specific regions held, though the SMG domain responses were weaker after controlling for visual features:
+
+- Left and right SMG responded more to physical events (LSMG: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "supramarginal_L"), 3, 2)`; RSMG `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "supramarginal_R"), 3, 2)`)
+- Left and right STS responded more to psychological events (LSTS `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "superiortemporal_L"), 3, 2)`; RSTS `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "superiortemporal_R"), 3, 2)`)
+
+The domain effects from APC, RFC, and MT were no longer statistically significant, after controlling for all visual features. 
+- Neither RFC nor APC showed a main effect of domain (APC: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "antParietal_bilateral"), 3, 2)`; RFC: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "precentral_inferiorfrontal_R"), 3, 2)`; MT: `r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "MT_bilateral"), 3, 2)`)
+- V1 still responded more to physical than psychological events (`r report_singlebetas(exp2_modelsummary_singlebetas_visualstats %>% filter(effect == "domain", ROI == "V1_bilateral"), 3, 2)`)
+
+
+```{r}
+DT::datatable(exp2_modelsummary_singlebetas_visualstats, options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+### Results from originally selected MD ROIs
+We originally pre-registered bilateral insula and right precentral / inferior frontal cortex as our focal MD ROIs. We discovered a mistake in this analysis, and followed the same pre-registered procedure for selecting the two MD ROIs that appear in the main text. We report the results from these original two ROIs, after correcting this mistake, for full transparency. 
+
+In Experiment 1, neither bilateral IFC, nor bilateral insula, responded significantly more to unexpected than expected events (IFC: `r report(exp1_modelsummaries_allregions %>% filter(ROI == "precentral_B_IFGop_bilateral", effect == "event", top_n_voxels == "100", extracted_run_number == "run1"), 3, 2)`; insula: `r report(exp1_modelsummaries_allregions %>% filter(ROI == "insula_bilateral", effect == "event", top_n_voxels == "100", extracted_run_number == "run1"), 3, 2)`). 
+
+In Experiment 2, bilateral IFC, but not bilateral insula, responded significantly more to unexpected than expected events (IFC: `r report(exp2_modelsummaries_allregions %>% filter(ROI == "precentral_B_IFGop_bilateral", effect == "event", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`; insula: `r report(exp2_modelsummaries_allregions %>% filter(ROI == "insula_bilateral", effect == "event", top_n_voxels == "100", extracted_run_number == "runs12"), 3, 2)`). 
+
+```{r}
+old_ROIs <- c("insula_bilateral", "precentral_B_IFGop_R")
+```
+
+Experiment 1
+
+```{r}
+DT::datatable(exp1_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "run1", ROI %in% old_ROIs), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+Experiment 2
+
+```{r}
+DT::datatable(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI %in% old_ROIs), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+### Psychology-Environment Events (all regions)
+
+Unlike the psych-action and physics events, when we applied the same check to the data, we did not find that the VOE effect decreased over runs (run 1: `r report_contrasts(exp2_psych_env_habituation_perrun %>% filter(extracted_run_number == "run1"), 3, 2)`), this effect was absent in the other runs (run 2: `r report_contrasts(exp2_psych_env_habituation_perrun %>% filter(extracted_run_number == "run2"), 3, 2)`; run 3: `r report_contrasts(exp2_psych_env_habituation_perrun %>% filter(extracted_run_number == "run3"), 3, 2)`; run 4: `r report_contrasts(exp2_psych_env_habituation_perrun %>% filter(extracted_run_number == "run4"), 3, 2)`).  Thus in the main text we have decided to show the results from both runs 1-2 (matching the other events), and runs 1-4. 
+
+
+Taking the data from all 4 runs, we found that many non-focal regions responded significantly more to unexpected than expected psychology-environment events. See here for results from all regions.
+
+The domain-general regions:
+
+- Left insula: `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == "100", extracted_run_number == "all_runs", focal_region == 0, effect == "event", ROI == "insula_L"), 3, 2)`
+- Right superior frontal `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == "100", extracted_run_number == "all_runs", focal_region == 0, effect == "event", ROI == "supFrontal_R"), 3, 2)`
+
+The domain-specific regions:
+
+- Right precentral/superior frontal `r  report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == "100", extracted_run_number == "all_runs", focal_region == 0, effect == "event", ROI == "precentral-supfrontal_R"), 3, 2)`
+- Right superior inferior frontal `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == "100", extracted_run_number == "all_runs", focal_region == 0, effect == "event", ROI == "supinffrontal_R"), 3, 2)`
+- Left superior parietal `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == "100", extracted_run_number == "all_runs", focal_region == 0, effect == "event", ROI == "supparietal_L"), 3, 2)`
+- Right superior parietal `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == "100", extracted_run_number == "all_runs", focal_region == 0, effect == "event", ROI == "supparietal_R"), 3, 2)`
+- Left lateral and ventral visual `r report(exp2_psych_env_modelsummaries_allregions %>% filter(top_n_voxels == "100", extracted_run_number == "all_runs", focal_region == 0, effect == "event", ROI == "vislateralventral_L"), 3, 2)`
+- Right lateral and ventral visual `r report(exp2_psych_env_modelsummaries_allregions %>%  filter(top_n_voxels == "100", extracted_run_number == "all_runs", focal_region == 0, effect == "event", ROI == "vislateralventral_R"), 3, 2)`
+
+
+```{r}
+DT::datatable(exp2_psych_env_modelsummaries_allregions %>%   filter(top_n_voxels == 100) %>%
+filter(extracted_run_number == "all_runs" | extracted_run_number == "runs12") %>% filter(effect == "event"), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
+```
+
+## 5. Supplemental MVPA results {.tabset}
+
+### Robust univariate, and absent multivariate, event effects
+In Experiment 2, both APC and RFC showed a univariate main effect of event. Our plan was to test for multivariate information about events that generalized across domains. However, neither of these regions contained multivariate information about event within domains (physics: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "antParietal_bilateral", category == "event_within_domain", same_domain == "physics"), 3)`; psychology: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "antParietal_bilateral", category == "event_within_domain", same_domain == "psychology"), 3)`). Thus, it did not make sense to us to strongly interpret the null MVPA effect across domains (bilateral APC: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "antParietal_bilateral", category == "event_across_domain"), 3)`; right frontal cortex: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "precentral_inferiorfrontal_R", category == "event_across_domain"), 3)`). 
+
+This stood in contrast to the robust domain multivariate effects. In Experiment 2, the regions that showed univariate domain effects, and no domainxevent interaction, showed multivariate domain effects across event types:
+
+- Bilateral V1: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "V1_bilateral", category == "domain_across_event"), 3)`
+- Bilateral MT: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "MT_bilateral", category == "domain_across_event"), 3)`
+- Bilateral APC: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "antParietal_bilateral", category == "domain_across_event"), 3)`
+- Left STS: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "superiortemporal_L", category == "domain_across_event"), 3)`
+- Right STS: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "superiortemporal_R", category == "domain_across_event"), 3)`
+- Right SMG: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "supramarginal_R", category == "domain_across_event"), 3)`
+
+The remaining focal region, left SMG, did not contain multivariate information about domains across events, `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "supramarginal_L", category == "domain_across_event"), 3)`. Instead, its domain boundary was marginally significant for unexpected events `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "supramarginal_L", same_event == "unexp", category == "domain_within_event"), 3)`, and not significant for expected events, `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "supramarginal_L", same_event == "exp", category == "domain_within_event"), 3)`
+
+### Events across domains
+
+Experiment 1
+
+```{r}
+DT::datatable(exp1_MVPA_results_allregions %>% filter(old_ROI == 0, category == "event_across_domain") %>% select(category, focal_region, ROI_name_final, ROI_category,  V, p, z, r, star) %>% arrange(focal_region, decreasing = TRUE), options = list(scrollX = TRUE)) %>% formatRound(columns = c(5:8), digits = 3)
+```
+
+Experiment 2
+
+```{r}
+DT::datatable(exp2_MVPA_results_allregions %>% filter(old_ROI == 0, category == "event_across_domain") %>% select(category, focal_region, ROI_name_final, ROI_category, V, p, z, r, star) %>% arrange(focal_region, decreasing = TRUE), options = list(scrollX = TRUE)) %>% formatRound(columns = c(5:8), digits = 3)
+```
+
+
+### Events within domains
+
+Experiment 1
+
+```{r}
+DT::datatable(exp1_MVPA_results_allregions %>% filter(old_ROI == 0, category == "event_within_domain") %>% select(category, ROI_name_final, focal_region, ROI_category, same_domain, V, p, z, r, star)  %>% arrange(focal_region, decreasing = TRUE), options = list(scrollX = TRUE)) %>% formatRound(columns = c(6:9), digits = 3)
+```
+
+Experiment 2
+
+```{r}
+DT::datatable(exp2_MVPA_results_allregions %>% filter(old_ROI == 0, category == "event_within_domain") %>% select(category, ROI_name_final, focal_region, ROI_category, same_domain, V, p, z, r, star)  %>% arrange(focal_region, decreasing = TRUE), options = list(scrollX = TRUE)) %>% formatRound(columns = c(6:9), digits = 3)
+```
+
+### Domains across events
+
+Experiment 1
+
+```{r}
+DT::datatable(exp1_MVPA_results_allregions %>% filter(old_ROI == 0, category == "domain_across_event") %>% select(category, ROI_name_final, focal_region, ROI_category, V, p, z, r, star)  %>% arrange(focal_region, decreasing = TRUE), options = list(scrollX = TRUE)) %>% formatRound(columns = c(5:8), digits = 3)
+```
+
+Experiment 2
+
+```{r}
+DT::datatable(exp2_MVPA_results_allregions %>% filter(old_ROI == 0, category == "domain_across_event") %>% select(category, ROI_name_final, focal_region, ROI_category, V, p, z, r, star)  %>% arrange(focal_region, decreasing = TRUE), options = list(scrollX = TRUE)) %>% formatRound(columns = c(5:8), digits = 3)
+```
+
+### Domains within events
+
+Experiment 1
+
+```{r}
+DT::datatable(exp1_MVPA_results_allregions %>% filter(old_ROI == 0, category == "domain_within_event") %>% select(category, ROI_name_final, focal_region, ROI_category, same_domain, V, p, z, r, star)  %>% arrange(focal_region, decreasing = TRUE), options = list(scrollX = TRUE)) %>% formatRound(columns = c(6:9), digits = 3)
+```
+
+Experiment 2
+
+```{r}
+DT::datatable(exp2_MVPA_results_allregions %>% filter(old_ROI == 0, category == "domain_within_event") %>% select(category, ROI_name_final, focal_region, ROI_category, same_domain, V, p, z, r, star)  %>% arrange(focal_region, decreasing = TRUE), options = list(scrollX = TRUE)) %>% formatRound(columns = c(6:9), digits = 3)
+```
+
+
+### Multivariate region-by-region analysis
+Here we report the results from a pre-registered confirmatory univariate analysis, studying the organization of information about domains and events across a large set of regions. However, after finding that regions that show a univariate VOE effect do not show a multivariate effect of event, within or across domains, we have decided to move that analysis, and this analysis, to the SI. Given that the multivariate information about domains is much stronger than multivariate information about events in our focal regions, we feel that we can no longer strongly interpret the following results, which show that both domain-specific and domain-general regions are organized more so by domain than by event. However, an alternative interpretation of these results is that the VOE response is encoded in the amplitude of activity voxels within an ROI, but the spatial pattern of this response is not reliable. Below we report them for full transparency.
+
+For each region, we computed the effect size for the multivariate category boundary for events across and within domains, and information about domains across and within events. In Exp 1 and 2, we conducted this analysis on the 18 domain-specific regions, and on the 24 domain-general regions (22 for Experiment 1; minus left and right MT, which we had no way to define). The voxel selection procedure was identical to the univariate analyses, except that we selected the top 100 voxels from each region in each hemisphere, to maximize the number of regions available as input. In this analysis, we focused on domain-within-events and events-within-domain effect sizes - that is, how much information there is about a given category boundary in a region, relative to variance and sample size. For each region, we computed a pair of MVPA effect sizes, r_event_psychology and r_event_physics, that describes the amount of event information for each domain separately. For each region, we also computed a second pair of MVPA effect sizes, r_domain_expected and r_domain_unexpected, that describes the amount of domain information for each event type separately. 
+
+Exploratory results from Experiment 1 supported these predictions: for both domain-specific and domain-general regions, the degree to which a region contained information to distinguish psychological expected vs unexpected events did not significantly predict that same region’s information to distinguish between physical expected and unexpected events (domain-specific: `r report_manyregions(exp1_MPVA_manyregions_results %>% filter(domain == "specific"), "event_within_domain", 3)`; domain-general: `r report_manyregions(exp1_MPVA_manyregions_results %>% filter(domain == "general"), "event_within_domain", 3)`). In contrast, the degree to which a region contained information to distinguish between expected psychological vs physical events strongly predicted the degree to which that region distinguishes between unexpected psychological vs physical events (domain-specific: `r report_manyregions(exp1_MPVA_manyregions_results %>% filter(domain == "specific"), "domain_within_event", 3)`; domain-general: `r report_manyregions(exp1_MPVA_manyregions_results %>% filter(domain == "general"), "domain_within_event", 3)`). Comparing the two correlations against each other using boostrapping to generate the distribution of correlations expected under the null hypothesis (4000 iterations), we found that the domain correlation was stronger than the event correlation for domain-specific regions (95% CI [`r exp1_MVPA_manyregions_perm_boot_ds_CI`], p = `r exp1_MVPA_manyregions_perm_boot_ds_pval` ), and for domain-general regions (95% CI [`r exp1_MVPA_manyregions_perm_boot_dg_CI`], p = `r exp1_MVPA_manyregions_perm_boot_dg_pval`).
+
+We then pre-registered these analyses as confirmatory in Experiment 2. We found that again, there was no relationship between event information across psychological and physical events in either domain-specific regions (`r report_manyregions(exp2_MVPA_manyregions_results %>% filter(domain == "specific"), "event_within_domain", 3)`) or domain-general regions (`r report_manyregions(exp2_MVPA_manyregions_results %>% filter(domain == "general"), "event_within_domain", 3)`). There was a correspondence between domain information across event types in both domain-specific regions (`r report_manyregions(exp2_MVPA_manyregions_results %>% filter(domain == "specific"), "domain_within_event", 3)`) and domain-general regions (`r report_manyregions(exp2_MVPA_manyregions_results %>% filter(domain == "general"), "domain_within_event", 3)`). However, the two correlations were not significantly different from each other in either domain-specific (95% CI [`r exp2_MVPA_manyregions_perm_boot_ds_CI`], p = `r exp2_MVPA_manyregions_perm_boot_ds_pval` ), nor domain-general regions (95% CI [`r exp2_MVPA_manyregions_perm_boot_dg_CI`], p = `r exp2_MVPA_manyregions_perm_boot_dg_pval`).). This could have been driven by the weak event information in domain-general regions, because of the way that we defined the MD regions in Exp 1 versus Exp 2, or because we restricted the analysis in Exp 2 to across-run distances. Thus, for both putatively domain-general and domain-specific regions, multivariate information across regions is organized by domain, more so than by event.
+
+
+

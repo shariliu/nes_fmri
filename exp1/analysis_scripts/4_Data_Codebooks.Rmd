@@ -1,0 +1,151 @@
+---
+title: "4_Data_Codebooks"
+output:
+  html_document:
+    toc: true
+    toc_depth: 4
+    toc_float: true
+    code_folding: 'hide'
+    self_contained: true
+  pdf_document:
+    toc: yes
+    toc_depth: 4
+    latex_engine: xelatex
+---
+
+Here we prepare codebooks for all input data from Exp 1.
+
+```{r setup}
+knitr::opts_chunk$set(
+  warning = TRUE, # show warnings during codebook generation
+  message = TRUE, # show messages during codebook generation
+  error = TRUE, # do not interrupt codebook generation in case of errors,
+                # usually better for debugging
+  echo = TRUE  # show R code
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+library(pacman)
+pacman::p_load(here,
+               codebook,
+               labelled,
+               tidyverse)
+```
+
+
+# ROI data
+
+Path: `input_data/Exp1_ROI_analysis_outputs_finalparcels_VOEsplitreps_Apr05_2023_convertVectors.csv`
+
+Note - the size of this dataset is too big for the `codebook` package (548352 lines), so I filtered it down to just the data from the top 100 voxels. 
+
+```{r prepare_codebook_1}
+ROI_data <- rio::import(here("input_data/Exp1_ROI_analysis_outputs_finalparcels_VOEsplitreps_Apr05_2023_convertVectors.csv")) %>%
+  filter(top_voxel_selection_method == "100")
+
+
+var_label(ROI_data) <- list(
+        top_voxel_selection_method = "Size of extracted ROI (# voxels)", 
+        ROI_name = "",
+        ROI_category = "Psychology, physics, early visual, or multiple demand ROI",
+        n_voxels_in_brainmasked_parcel = "N voxels in parcel",
+        subjectID = "",
+        contrast_for_topVoxel_selection = "Contrast basis for ROI selection",
+        selection_contrast_task_name = "Task basis for ROI selection",
+        extracted_copes_main_condition = "Which condition copes were extracted from",
+        extracted_run_number = "Which run (1-4) copes were extracted from",
+        mean_topVoxels_main_condition_copes = "Mean response from ROI",
+        vector1_topVoxels_main_condition_copes = "Vector of responses in ROI"
+)
+
+metadata_list(ROI_data)
+
+metadata(ROI_data)$name <- "ROI data, Exp 1"
+metadata(ROI_data)$description <- "ROI data from Exp1 in the manuscript entitled 'Violations of physical and psychological expectations in the human adult brain' by Liu et al."
+metadata(ROI_data)$datePublished <- "2023-08-21"
+metadata(ROI_data)$creator <- list(
+      "@type" = "Person",
+      givenName = "Shari", familyName = "Liu",
+      email = "shariliu@jhu.edu", 
+      affiliation = list("@type" = "Organization",
+        name = "Johns Hopkins University, Baltimore, MD, USA"))
+metadata(ROI_data)$citation <- "Liu, S., Lydic, K., Mei, L., & Saxe, R. (2023, preprint). Violations of physical and psychological expectations in the human adult brain."
+metadata(ROI_data)$temporalCoverage <- "2023" 
+```
+
+```{r codebook_1}
+codebook(ROI_data)
+```
+
+# Subject info
+
+Path: `input_data/exp1_subject_info.csv`
+
+```{r prepare_codebook_2}
+subj_info <- rio::import(here("input_data/exp1_subject_info.csv"))
+
+
+var_label(subj_info) <- list(
+        experiment = "", 
+        include = "Include subject in analysis?",
+        exclude_why = "If exclude, why?",
+        subjectID = "",
+        gender = "Self-reported gender",
+        handed = "Left or right handed",
+        age = "Age in years at time of scan",
+        data_sharing = "Consented to sharing de-faced images on OpenNeuro?"
+)
+
+
+metadata(subj_info)$name <- "Subject info, Experiment 1"
+metadata(subj_info)$description <- "Subject information for the manuscript entitled 'Violations of physical and psychological expectations in the human adult brain' by Liu et al."
+metadata(subj_info)$datePublished <- "2023-08-21"
+metadata(subj_info)$creator <- list(
+      "@type" = "Person",
+      givenName = "Shari", familyName = "Liu",
+      email = "shariliu@jhu.edu", 
+      affiliation = list("@type" = "Organization",
+        name = "Johns Hopkins University, Baltimore, MD, USA"))
+metadata(ROI_data)$citation <- "Liu, S., Lydic, K., Mei, L., & Saxe, R. (2023, preprint). Violations of physical and psychological expectations in the human adult brain."
+metadata(subj_info)$temporalCoverage <- "2023" 
+```
+
+```{r codebook_2}
+codebook(subj_info)
+```
+
+
+# Region info
+
+Path: `input_data/manyregions_info.csv`
+
+
+```{r prepare_codebook_3}
+region_info <- rio::import(here("input_data/manyregions_info.csv"))
+
+
+var_label(region_info) <- list(
+        ROI_name = "Original ROI name that matches file names of ROI parcels", 
+        ROI_name_final = "Simplified ROI name",
+        ROI_category = "Psychology physics early visual or MD",
+        focal_region = "Focal region in analyses?",
+        manyregions_region = "Included in regions involving many ROIs?",
+        old_ROI = "Old ROI that was generated due to mistake in analysis? Included for transparency"
+)
+
+
+metadata(region_info)$name <- "Region info, Experiment 1"
+metadata(region_info)$description <- "Region information for the manuscript entitled 'Violations of physical and psychological expectations in the human adult brain' by Liu et al."
+metadata(region_info)$datePublished <- "2023-08-21"
+metadata(region_info)$creator <- list(
+      "@type" = "Person",
+      givenName = "Shari", familyName = "Liu",
+      email = "shariliu@jhu.edu", 
+      affiliation = list("@type" = "Organization",
+        name = "Johns Hopkins University, Baltimore, MD, USA"))
+metadata(region_info)$citation <- "Liu, S., Lydic, K., Mei, L., & Saxe, R. (2023, preprint). Violations of physical and psychological expectations in the human adult brain."
+metadata(region_info)$temporalCoverage <- "2023" 
+```
+
+```{r codebook_3}
+codebook(region_info)
+```

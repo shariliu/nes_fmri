@@ -1,0 +1,11 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/1067917/1683b38da362479f8688daa9b64ce80f
+bundleId: https://api.rpubs.com/api/v1/document/1067917/1683b38da362479f8688daa9b64ce80f
+url: http://rpubs.com/shariliu/1067917
+when: 1692195152.55576
+lastSyncTime: 1692195152.55577

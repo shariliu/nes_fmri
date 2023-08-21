@@ -1,0 +1,803 @@
+---
+title: "Violations of physical and psychological expectations in the human adult brain - Experiment 1 Multivariate Analysis"
+author: "Shari Liu"
+date: '2023-08-01'
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    number_sections: yes
+    theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(pacman)
+pacman::p_load(tidyverse,
+               conflicted,
+               here,
+               effsize,
+               ggrepel,
+               patchwork,
+               ggpubr,
+               boot,
+               nptest,
+               boot.pval,
+               cowplot,
+               DT
+)
+
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("rename", "dplyr")
+conflict_prefer("arrange", "dplyr")
+
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("lmer", "lmerTest")
+conflict_prefer("here", "here")
+
+source(here(
+            "helper_funs.R"))
+
+options(digits = 3)
+sessionInfo()
+```
+
+# Overview
+This script:
+
+Part 1: visualizes and analyzes the within vs between multivariate patterns in 8 focal regions (left and right SMG, left and right STS, left and right V1, bilateral APC and RFC), along the following boundaries:
+
+- event within domain
+- event across domain
+- domain within event
+- domain across event
+
+Part 2: Does the same across other, non-focal ROIs
+
+Part 3: Performs a region by region MVPA effect size analysis over domain-specific and domain-general regions.
+
+All instances of `write_rds` and similar have been commented out to avoid writing over existing files. Uncomment those statements in order to reproduce these steps and save (new) outputs.
+
+```{r}
+MVPA_processed_distances <- readRDS(here("outputs/multivariate_data/study1_MVPA_processed_distances_top100.Rds")) 
+```
+
+# Analyze between vs within distances
+## (1) Events Across Domains
+```{r}
+event.across.domain.summarylong <- MVPA_processed_distances %>%
+  filter(pair_label_event_across_domains != "drop") %>%
+  group_by(distance_metric,
+           subj,
+           ROI_name_final,
+           pair_label_event_across_domains) %>%
+  summarise(mean_dist = mean(dist))
+
+event.across.domain.summarywide <-
+  event.across.domain.summarylong %>%
+  pivot_wider(
+    id_cols = c(subj, ROI_name_final, distance_metric),
+    names_from = pair_label_event_across_domains,
+    values_from = mean_dist
+  ) %>%
+  mutate(diff = between - within,
+         category = "event_across_domain")
+
+results1_event.across.domain <- event.across.domain.summarywide %>% 
+  group_by(distance_metric, ROI_name_final, category) %>%
+  summarise(V = wilcox.test(diff, alternative = "greater", mu = 0)$statistic,
+            p = wilcox.test(diff, alternative = "greater", mu = 0)$p.value,
+            z = qnorm(p/2),
+            r = abs(z/sqrt(16))) 
+```
+
+
+## (2) Domains Across Events
+```{r}
+domain.across.event.summarylong <- MVPA_processed_distances %>%
+  filter(pair_label_domains_across_events != "drop") %>%
+  group_by(distance_metric,
+           subj,
+           ROI_name_final,
+           pair_label_domains_across_events) %>%
+  summarise(mean_dist = mean(dist))
+
+domain.across.event.summarywide <-
+  domain.across.event.summarylong %>%
+  pivot_wider(
+    id_cols = c(subj, ROI_name_final, distance_metric),
+    names_from = pair_label_domains_across_events,
+    values_from = mean_dist
+  ) %>%
+  mutate(diff = between - within,
+         category = "domain_across_event")
+
+results2_domain.across.event <- domain.across.event.summarywide %>% 
+  group_by(distance_metric, ROI_name_final, category) %>%
+  summarise(V = wilcox.test(diff, alternative = "greater", mu = 0)$statistic,
+            p = wilcox.test(diff, alternative = "greater", mu = 0)$p.value,
+            z = qnorm(p/2),
+            r = abs(z/sqrt(17))) 
+```
+
+## (3) Events within domains
+
+```{r}
+
+event.within.domain.summarylong <- MVPA_processed_distances %>%
+  filter(pair_label_event_within_domain != "drop" &
+           pair_label_event_within_domain != "drop_domain") %>%
+  group_by(distance_metric,
+           subj,
+           ROI_name_final,
+           pair_label_event_within_domain) %>%
+  summarise(mean_dist = mean(dist))
+
+event.within.domain.summarywide <-
+  event.within.domain.summarylong %>%
+  pivot_wider(
+    id_cols = c(subj, ROI_name_final, distance_metric),
+    names_from = pair_label_event_within_domain,
+    values_from = mean_dist
+  ) %>%
+  mutate(diff = between - within)
+
+event.within.domain.perdomain.summarylong <-
+  MVPA_processed_distances %>%
+  filter(pair_label_event_within_domain != "drop" &
+           pair_label_event_within_domain != "drop_domain") %>%
+  group_by(distance_metric,
+           subj,
+           ROI_name_final,
+           same_domain,
+           pair_label_event_within_domain) %>%
+  summarise(mean_dist = mean(dist))
+
+
+event.within.domain.perdomain.summarywide <-
+  event.within.domain.perdomain.summarylong %>%
+  pivot_wider(
+    id_cols = c(subj, ROI_name_final, distance_metric, same_domain),
+    names_from = pair_label_event_within_domain,
+    values_from = mean_dist
+  ) %>%
+  mutate(diff = between - within,
+         category = "event_within_domain")
+
+results3_event.within.domain <- event.within.domain.perdomain.summarywide %>% 
+  group_by(distance_metric, same_domain, ROI_name_final, category) %>%
+  summarise(V = wilcox.test(diff, alternative = "greater", mu = 0)$statistic,
+            p = wilcox.test(diff, alternative = "greater", mu = 0)$p.value,
+            z = qnorm(p/2),
+            r = abs(z/sqrt(17))) 
+```
+
+
+## (4) Domains within events
+
+```{r}
+domain.within.event.summarylong <- MVPA_processed_distances %>%
+  filter(
+    pair_label_domain_within_event != "drop" &
+      pair_label_domain_within_event != "drop_event"
+  ) %>%
+  group_by(distance_metric, subj, ROI_name_final, pair_label_domain_within_event) %>%
+  summarise(mean_dist = mean(dist))
+
+domain.within.event.summarywide <-
+  domain.within.event.summarylong %>%
+  pivot_wider(
+    id_cols = c(subj, ROI_name_final, distance_metric),
+    names_from = pair_label_domain_within_event,
+    values_from = mean_dist
+  ) %>%
+  mutate(diff = between - within)
+
+domain.within.event.perevent.summarylong <-
+  MVPA_processed_distances %>%
+  filter(
+    pair_label_domain_within_event != "drop" &
+      pair_label_domain_within_event != "drop_event"
+  ) %>%
+  group_by(distance_metric,
+           subj,
+           ROI_name_final,
+           same_event,
+           pair_label_domain_within_event) %>%
+  summarise(mean_dist = mean(dist))
+
+domain.within.event.perevent.summarywide <-
+  domain.within.event.perevent.summarylong %>%
+  pivot_wider(
+    id_cols = c(subj, ROI_name_final, distance_metric, same_event),
+    names_from = pair_label_domain_within_event,
+    values_from = mean_dist
+  ) %>%
+  mutate(diff = between - within,
+         category = "domain_within_event")
+
+
+results4_domain.within.event <- domain.within.event.perevent.summarywide %>% 
+  group_by(distance_metric, same_event, ROI_name_final, category) %>%
+  summarise(V = wilcox.test(diff, alternative = "greater", mu = 0)$statistic,
+            p = wilcox.test(diff, alternative = "greater", mu = 0)$p.value,
+            z = qnorm(p/2),
+            r = abs(z/sqrt(17))) 
+```
+
+## Combining MVPA results
+
+```{r, include = TRUE}
+
+MVPA_results0 <-
+  rbind(
+    results1_event.across.domain,
+    results2_domain.across.event,
+    results3_event.within.domain,
+    results4_domain.within.event
+  ) %>%
+  mutate(p_tails = "one",
+         H0_mu = 0,
+         H1 = "greater") %>%
+  as.data.frame()
+
+region_info <- read.csv(here("input_data/manyregions_info.csv"))
+
+MVPA_results <- full_join(MVPA_results0, region_info, by = c("ROI_name_final")) 
+
+MVPA_results_out <- MVPA_results %>%
+  mutate(star = as.factor(case_when(p< .001 ~ "***",
+                        p < .01 ~ "**",
+                        p < .05 ~ "*",
+                        p < .1 ~ "~"))) %>%
+  mutate(test = "one-tailed Wilcoxon signed rank test against mu = 0")
+
+MVPA_results_out$ROI_category <- factor(MVPA_results_out$ROI_category, levels = c("physics", "psychology", "MD", "early_visual"))
+# saveRDS(MVPA_results_out, here("outputs/multivariate_results/study1_MVPA_results_allregions_top100.Rds"))
+
+```
+
+```{r}
+MVPA_results_persubject0 <-
+  rbind(
+    event.across.domain.summarywide,
+    domain.across.event.summarywide,
+    event.within.domain.perdomain.summarywide,
+    domain.within.event.perevent.summarywide
+  ) %>%
+  mutate(p_tails = "one",
+         H0_mu = 0,
+         H1 = "greater") %>%
+  as.data.frame()
+
+MVPA_results_persubject <- full_join(MVPA_results_persubject0, region_info)
+MVPA_results_persubject$ROI_category <- factor(MVPA_results_persubject$ROI_category, levels = c("physics", "psychology", "MD", "early_visual"))
+
+# saveRDS(MVPA_results_persubject, here("outputs/multivariate_results/study1_MVPA_results_allregions_top100_persubject.Rds"))
+
+```
+
+
+# PART 1: Focal regions
+
+```{r}
+MVPA_results_focal <- readRDS(here("outputs/multivariate_results/study1_MVPA_results_allregions_top100.Rds")) %>%
+  filter(focal_region == 1,
+         distance_metric == "euclidean")
+
+MVPA_results_focal_persubject <- readRDS(here("outputs/multivariate_results/study1_MVPA_results_allregions_top100_persubject.Rds")) %>%
+  filter(focal_region == 1,
+         distance_metric == "euclidean")
+```
+
+```{r}
+DT::datatable(dplyr::arrange(MVPA_results_focal, category), options = list(scrollX = TRUE, pageLength = 48))
+```
+
+## Visualize between vs within
+```{r}
+
+plot_multivariate <- function(category_label, facet_label) {
+  plot <-
+    ggplot(
+      MVPA_results_focal_persubject %>% filter(
+        category == {{category_label}},
+        distance_metric == "euclidean"
+      ),
+      aes(x = ROI_name_final, y = diff, fill = ROI_category)
+    ) +
+    stat_summary(stat = "mean_se()", geom = "bar") +
+    geom_hline(yintercept = 0, linetype = "dotted") +
+    stat_summary(
+      geom = "errorbar",
+      width = .1,
+      fun.data = "mean_se",
+      colour = "black"
+    ) +
+    ylab("Between - Within Euclidean Distance") +
+    geom_text(
+      data = MVPA_results_focal %>% filter(
+        category == {{category_label}},
+        distance_metric == "euclidean"
+      ),
+      mapping = aes(label = star, x = ROI_name_final, y = -10),
+      size = 7,
+      colour = "red",
+      family = "mono",
+      # inherit.aes = FALSE
+    ) +
+    geom_point(alpha = .2) +
+    theme_cowplot(10) + 
+    scale_fill_manual(values = c("#4894ff", "#f71d00", "#f8bf00", "#fb00d3")) +
+    coord_flip() +
+    ggtitle(paste0("Category boundary: ", category_label))
+  if (!is.na(facet_label)) {
+    return(plot + facet_wrap({{facet_label}}))
+  }
+  else {
+    return(plot)
+  }
+}
+
+```
+
+```{r, fig.height = 16}
+plot_multivariate("domain_across_event", NA) / plot_multivariate("event_across_domain", NA) |
+plot_multivariate("domain_within_event", "same_event") / plot_multivariate("event_within_domain", "same_domain") +  plot_annotation(tag_levels = 'A') + plot_layout(widths = c(1, 2)) 
+```
+
+## Visualize including noise ceiling
+
+```{r}
+euclidean_noise_ceiling <- readRDS(here("outputs/multivariate_analysis_outputs/MVPA_noiseceiling_perROI.Rds")) %>%
+  filter(cor_metric == "euclidean") %>%
+  select(-cor_metric) 
+```
+
+```{r, eval = FALSE}
+MVPA_results_within_between_separate_prelim <- rbind(domain.within.event.summarylong, event.within.domain.summarylong, domain.within.event.perevent.summarylong, event.within.domain.perdomain.summarylong, domain.across.event.summarylong, event.across.domain.summarylong)
+
+
+MVPA_results_within_between_separate_prelim2 <- left_join(MVPA_results_within_between_separate_prelim, euclidean_noise_ceiling)
+
+MVPA_results_within_between_separate_final <- left_join(MVPA_results_within_between_separate_prelim2, region_info)
+MVPA_results_within_between_separate_final$ROI_category <-
+  factor(
+    MVPA_results_within_between_separate_final$ROI_category,
+    levels = c("physics", "psychology", "MD", "early_visual")
+  )
+# saveRDS(MVPA_results_within_between_separate_final, here("outputs/multivariate_analysis_outputs/study1_MVPA_results_within_between_separate.Rds"))
+
+```
+
+```{r}
+MVPA_results_within_between_separate_final <- read_rds( here("outputs/multivariate_analysis_outputs/study1_MVPA_results_within_between_separate.Rds"))
+
+```
+
+```{r}
+
+MVPA_focal_domainplot <-
+  ggplot(
+    MVPA_results_within_between_separate_final %>%
+      filter(
+        !is.na(pair_label_domains_across_events),
+        pair_label_domains_across_events != "drop_event",
+        distance_metric == "euclidean",
+        focal_region == 1
+      ),
+    aes(pair_label_domains_across_events, mean_dist, fill = ROI_category)
+  ) +
+  # geom_boxplot() +
+  stat_summary(stat = "mean_se()",
+               geom = "bar",
+               colour = "black") +
+  stat_summary(stat = "mean_se()", geom = "errorbar", width = .2) +
+  geom_point(alpha = .2) +
+  scale_fill_manual(values = c("#4894ff", "#f71d00", "#f8bf00", "#fb00d3")) +
+  facet_wrap(
+    ~ factor(
+      ROI_name_final,
+      levels = c(
+        "superiortemporal_L",
+        "superiortemporal_R",
+        "supramarginal_L",
+        "supramarginal_R",
+        "V1_L",
+        "V1_R",
+        "precentral_inferiorfrontal_R",
+        "antParietal_bilateral"
+      )
+    ),
+    labeller = labeller(ROI_name_final = label_wrap_gen(width = 10, multi_line = TRUE)),
+    nrow = 2
+  ) +
+  xlab("Domains Across Events Category Boundary") +
+  ylab("Euclidean Distance") +
+  geom_hline(
+    data = euclidean_noise_ceiling %>% filter(focal_region == 1),
+    aes(
+      yintercept = noiseceiling_upper,
+      size = 1,
+      alpha = 0.5
+    )
+  )
+
+MVPA_focal_eventplot <-
+  ggplot(
+    MVPA_results_within_between_separate_final %>%
+      filter(
+        !is.na(pair_label_event_across_domains),
+        pair_label_event_across_domains != "drop_event",
+        distance_metric == "euclidean",
+        focal_region == 1
+      ),
+    aes(pair_label_event_across_domains, mean_dist, fill = ROI_category)
+  ) +
+  # geom_boxplot() +
+  stat_summary(stat = "mean_se()",
+               geom = "bar",
+               colour = "black") +
+  stat_summary(stat = "mean_se()", geom = "errorbar", width = .2) +
+  geom_point(alpha = .2) +
+  xlab("Events Across Domains Category Boundary") +
+  ylab("Euclidean Distance") +
+  scale_fill_manual(values = c("#4894ff", "#f71d00", "#f8bf00", "#fb00d3")) +
+  facet_wrap( ~ factor(
+    ROI_name_final,
+      levels = c(
+        "superiortemporal_L",
+        "superiortemporal_R",
+        "supramarginal_L",
+        "supramarginal_R",
+        "V1_L",
+        "V1_R",
+        "precentral_inferiorfrontal_R",
+        "antParietal_bilateral"
+      )
+  ), nrow = 2) +
+  geom_hline(
+    aes(
+      yintercept = noiseceiling_upper,
+      size = 1,
+      alpha = 0.5
+    )
+  ) 
+  # coord_cartesian(ylim = c(0, 170))
+```
+
+### Domains across events
+```{r}
+MVPA_focal_domainplot
+```
+
+### Events across domains
+
+```{r}
+MVPA_focal_eventplot
+```
+
+
+# PART 2: All regions
+
+```{r}
+MVPA_results_all <- readRDS(here("outputs/multivariate_results/study1_MVPA_results_allregions_top100.Rds")) %>%
+  filter(distance_metric == "euclidean")
+
+MVPA_results_all_persubject <- readRDS(here("outputs/multivariate_results/study1_MVPA_results_allregions_top100_persubject.Rds")) %>%
+  filter(distance_metric == "euclidean")
+
+```
+
+```{r}
+
+plot_multivariate_all <- function(category_label, facet_label) {
+  plot <-
+    ggplot(
+      MVPA_results_all_persubject %>% filter(
+        category == {{category_label}},
+        # category == "domain_within_event",
+        distance_metric == "euclidean"
+      ),
+      aes(x = ROI_name_final, y = diff, fill = ROI_category)
+    ) +
+    stat_summary(stat = "mean_se()", geom = "bar") +
+    geom_hline(yintercept = 0, linetype = "dotted") +
+    stat_summary(
+      geom = "errorbar",
+      width = .1,
+      fun.data = "mean_se",
+      colour = "black"
+    ) +
+    ylab("Between - Within Euclidean Distance") +
+    geom_text(
+      data = MVPA_results_all %>% filter(
+        category == {{category_label}},
+        # category == "domain_within_event",
+        distance_metric == "euclidean"
+      ),
+      mapping = aes(label = star, x = ROI_name_final, y = -10),
+      size = 7,
+      colour = "red",
+      family = "mono",
+      # inherit.aes = FALSE
+    ) +
+    geom_point(alpha = .2) +
+    theme_cowplot(10) +
+    scale_fill_manual(values = c("#2eafb9", "#f74d09", "#f2de1e", "#f269f5")) +
+    coord_flip() +
+    # facet_wrap(vars(.data[[facet_label]])) +
+    ggtitle(paste0("Category boundary: ", category_label))
+
+  if (!is.na(facet_label)) {
+    return(plot + facet_wrap(vars(.data[[facet_label]])))
+  }
+  else {
+    return(plot)
+  }
+}
+
+
+```
+
+```{r, fig.height = 15}
+plot_multivariate_all("domain_across_event", NA)
+plot_multivariate_all("event_across_domain", NA)
+plot_multivariate_all("domain_within_event", "same_event")
+plot_multivariate_all("event_within_domain", "same_domain")
+```
+
+```{r}
+DT::datatable(dplyr::arrange(MVPA_results_all, category), options = list(scrollX = TRUE, pageLength = 100))
+```
+# PART 3: Region by Region Effect Size
+
+## Domain specific regions
+```{r}
+DS_results <-
+  readRDS(here(
+    "outputs/multivariate_results/study1_MVPA_results_allregions_top100.Rds"
+  )) %>%
+  filter(distance_metric == "euclidean_zscored",
+         old_ROI == 0,
+         manyregions_region == 1) %>%
+  filter(ROI_category == "psychology" |
+           ROI_category == "physics") %>%
+  # filter(!str_detect(ROI_name_final, "bilateral")) %>%
+  pivot_wider(
+    id_cols = c(ROI_name_final, ROI_category),
+    names_from = c(category, same_domain, same_event),
+    values_from = r
+  ) %>%
+  mutate(domain = "specific")
+
+colnames(DS_results) <- gsub("_NA","",colnames(DS_results))
+
+DS_domains_within_events <-
+  ggplot(data = DS_results,
+         aes(
+           domain_within_event_exp,
+           domain_within_event_unexp
+         )) +
+  geom_smooth(method = "glm", colour = "black") +
+  geom_point(aes(colour = ROI_category), size = 3) +
+  xlab("Effect size (r), Domains within Events, Expected") +
+  ylab("Effect size (r), Domains within Events, Unexpected") +
+  # coord_cartesian(ylim = c(0, 1),
+  #                 xlim = c(0, 1)) +
+  geom_text_repel(aes(label = ROI_name_final), size = 3) +
+  theme_cowplot(10) +
+  scale_colour_manual(values = c("#4894ff", "#f71d00")) +
+  ggtitle(label = "MVPA effect sizes per ROI, \ndomains within events, z-scored")
+
+
+DS_events_within_domains <-
+  ggplot(data = DS_results,
+         aes(
+           event_within_domain_psychology,
+           event_within_domain_physics
+         )) +
+  geom_smooth(method = "glm", colour = "black") +
+  geom_point(aes(colour = ROI_category), size = 3) +
+  xlab("Effect size (r), Domains within Events, Expected") +
+  ylab("Effect size (r), Domains within Events, Unexpected") +
+  # coord_cartesian(ylim = c(0, 1),
+  #                 xlim = c(0, 1)) +
+  geom_text_repel(aes(label = ROI_name_final), size = 3) +
+  theme_cowplot(10) +
+  scale_colour_manual(values = c("#4894ff", "#f71d00")) +
+  ggtitle(label = "MVPA effect sizes per ROI, \nevents within domains, z-scored")
+```
+
+
+```{r}
+DS_events_within_domains + DS_domains_within_events
+```
+
+## Domain general regions
+
+```{r}
+DG_results <-
+  readRDS(here(
+    "outputs/multivariate_results/study1_MVPA_results_allregions_top100.Rds"
+  )) %>%
+  filter(distance_metric == "euclidean_zscored",
+         old_ROI == 0,
+         manyregions_region == 1) %>%
+  filter(ROI_category == "MD" | ROI_category == "early_visual") %>%
+  filter(!str_detect(ROI_name_final, "bilateral")) %>%
+  pivot_wider(
+    id_cols = c(ROI_name_final, ROI_category),
+    names_from = c(category, same_domain, same_event),
+    values_from = r
+  ) %>%
+  mutate(domain = "general")
+
+colnames(DG_results) <- gsub("_NA","",colnames(DG_results))
+
+DG_results_z <- DG_results %>%
+  mutate_at(c("event_within_domain_physics", 
+              "event_within_domain_psychology",
+              "domain_within_event_exp",
+              "domain_within_event_unexp"), scale)
+
+DG_results_sqrt <- DG_results %>%
+  mutate_at(c("event_within_domain_physics", 
+              "event_within_domain_psychology",
+              "domain_within_event_exp",
+              "domain_within_event_unexp"), sqrt)
+
+
+DG_events_within_domains <-
+  ggplot(data = DG_results,
+         aes(event_within_domain_psychology, event_within_domain_physics)) +
+  geom_smooth(method = "glm", colour = "black") +
+  geom_point(aes(colour = ROI_category), size = 3) +
+  ylab("Effect size (r), Events within Domains, Physics") +
+  xlab("Effect size (r), Events within Domains, Psychology") +
+  # coord_cartesian(ylim = c(0, 1),
+                  # xlim = c(0, 1)) +
+  geom_text_repel(aes(label = ROI_name_final), size = 3) +
+  theme_cowplot(10) +
+  scale_colour_manual(values = c("#f8bf00", "#fb00d3")) +
+  ggtitle(label = "MVPA effect sizes per ROI, \nevents within domains, z-scored")
+
+DG_domains_within_events <-
+  ggplot(data = DG_results,
+         aes(
+           domain_within_event_exp,
+           domain_within_event_unexp
+         )) +
+  geom_smooth(method = "glm", colour = "black") +
+  geom_point(aes(colour = ROI_category), size = 3) +
+  xlab("Effect size (r), Domains within Events, Expected") +
+  ylab("Effect size (r), Domains within Events, Unexpected") +
+  # coord_cartesian(ylim = c(0, 1),
+  #                 xlim = c(0, 1)) +
+  geom_text_repel(aes(label = ROI_name_final), size = 3) +
+  theme_cowplot(10) +
+  scale_colour_manual(values = c("#f8bf00", "#fb00d3")) +
+  ggtitle(label = "MVPA effect sizes per ROI, \ndomains within events, z-scored")
+
+```
+
+```{r}
+DG_events_within_domains + DG_domains_within_events
+```
+
+## Statistics
+
+
+```{r}
+# instead of testing whether the linear relationship between x and y is 0, 
+# we test for independence instead. H0 is that x and y are independent; F_{XY}(x,y) = F_X(x) F_Y(y).
+observed_cors_ind <- rbind(DS_results, DG_results) %>%
+  group_by(domain) %>%
+  summarise(
+    cor_domain_within_event =
+      np.cor.test(
+        domain_within_event_exp,
+        domain_within_event_unexp,
+        alternative = "greater",
+        independent = TRUE
+      )$estimate,
+    
+    p_domain_within_event =
+      np.cor.test(
+        domain_within_event_exp,
+        domain_within_event_unexp,
+        alternative = "greater",
+        independent = TRUE
+      )$p.value,
+    
+    cor_event_within_domain =
+      np.cor.test(
+        DG_results$event_within_domain_psychology,
+        DG_results$event_within_domain_physics,
+        alternative = "greater",
+        independent = TRUE
+      )$estimate,
+    
+    p_event_within_domain =
+      np.cor.test(
+        DG_results$event_within_domain_psychology,
+        DG_results$event_within_domain_physics,
+        alternative = "greater",
+        independent = TRUE
+      )$p.value
+  )
+
+# write_rds(observed_cors_ind, path = here("outputs/multivariate_results/study1_MVPA_manyregions_observed_cor.Rds"))
+
+```
+
+
+```{r}
+
+set.seed(2020)
+## First define a function to work out the difference of corrs:
+diff_corr <- function(data, indices) {
+  data <- data[indices,]
+  cor1 <-
+    np.cor.test(data$domain_within_event_exp,
+                data$domain_within_event_unexp,
+                alternative = "greater",
+                independent = TRUE,
+                parallel = TRUE)$estimate
+  cor2 <-
+    np.cor.test(
+      data$event_within_domain_psychology,
+      data$event_within_domain_physics,
+      alternative = "greater",
+      independent = TRUE,
+      parallel = TRUE)$estimate
+
+    return(cor1 - cor2)
+}
+
+
+```
+
+### Domain specific
+```{r eval= FALSE}
+## Then apply a bootstrap procedure with x draws:
+# res_boot_DS <- boot(data = DS_results,
+#                  R = 4000,
+#                  statistic = diff_corr,
+#                  stype = "i")
+# plot(res_boot_DS)
+# saveRDS(res_boot_DS, here("outputs/multivariate_results/study1_MVPA_dsregions_4000perms_confirmatory.Rds"))
+
+res_boot_DS <- read_rds(here("outputs/multivariate_results/study1_MVPA_dsregions_4000perms_confirmatory.Rds"))
+## Retrieve the empirical 95% confidence interval:
+ds_results <- append(boot.ci(res_boot_DS, type = "perc", conf = 0.95),boot.pval(res_boot_DS))
+
+# saveRDS(ds_results, here("outputs/multivariate_results/study1_MVPA_dsregions_summary.Rds"))
+
+
+```
+
+### Domain general
+```{r eval= FALSE}
+## Then apply a bootstrap procedure with x draws:
+# res_boot_DG <- boot(data = DG_results,
+#                  R = 4000,
+#                  statistic = diff_corr,
+#                  stype = "i")
+# plot(res_boot_DG)
+saveRDS(res_boot_DG, here("outputs/multivariate_results/study1_MVPA_dgregions_4000perms_confirmatory.Rds"))
+
+res_boot_DG <- read_rds(here("outputs/multivariate_results/study1_MVPA_dgregions_4000perms_confirmatory.Rds"))
+
+## Retrieve the empirical 95% confidence interval:
+dg_results <- append(boot.ci(res_boot_DG, type = "perc", conf = 0.95),boot.pval(res_boot_DG))
+
+# saveRDS(dg_results, here("outputs/multivariate_results/study1_MVPA_dgregions_summary.Rds"))
+
+```
+
+

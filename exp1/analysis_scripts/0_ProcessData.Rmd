@@ -1,0 +1,676 @@
+---
+title: "Study1_ProcessData"
+author: "Shari Liu"
+date: '2022-09-23'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(pacman)
+pacman::p_load(tidyverse,
+               conflicted,
+               here,
+               janitor,
+               cowplot,
+               data.table,
+               corrplot,
+               viridis,
+               psych,
+               factorextra,
+               cluster)
+
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("rename", "dplyr")
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("lmer", "lmerTest")
+conflict_prefer("here", "here")
+conflict_prefer("arrange", "dplyr")
+source(here("helper_funs.R"))
+
+sessionInfo()
+theme_set(theme_cowplot(10))
+
+```
+
+# Overview
+This script processes Study 1 data for univariate and multivariate analysis. All instances of `saveRDS` have been commented out to avoid writing over existing files. Uncomment those statements in order to reproduce these steps and save (new) outputs.
+
+# (1) Set up univariate data
+
+```{r}
+# read in data, and information about ROIs
+factors <-
+  c("ROI_name", "event", "top_n_voxels", "domain", "event", "task", "extracted_copes_main_condition", "extracted_run_number")
+
+study1.data0 <-
+  read.csv(
+    here("input_data/Exp1_ROI_analysis_outputs_finalparcels_VOEsplitreps_Apr05_2023_convertVectors.csv"
+    )
+  ) %>%
+  separate(
+    col = "extracted_copes_main_condition",
+    into = c("domain", "task", "event", "rep") ,
+    sep = "_",
+    remove = FALSE
+  ) %>%
+  rename(meanbeta = mean_topVoxels_main_condition_copes,
+         top_n_voxels = top_voxel_selection_method) %>%
+  mutate_at(factors, as.factor) %>%
+  unique() %>%
+  mutate(vis_statistics_video_group = case_when(task == "efficiency" ~ "psychology_efficiency_exp1",
+                                                task == "goal" ~ "psychology_goal_exp1",
+                                                task == "solidity" ~ "physics_solidity-exp1_block",
+                                                task == "support" ~ "physics_support-exp1_ball"))
+
+region_info <- read.csv(here("input_data/manyregions_info.csv")) %>%
+  filter(!str_detect(ROI_name_final, "MT"))
+
+# Exp 1 does not include MT (no way to functionally ID)
+study1.data <- full_join(study1.data0, region_info) %>%
+  filter(!str_detect(ROI_name_final, "MT"))
+
+study1.data$event <- relevel(study1.data$event, ref = "fam")
+study1.data$rep <- as.ordered(study1.data$rep)
+levels(study1.data$task) <- c("efficiency", "goal", "solidity", "support")
+```
+
+```{r}
+# checking that all regions are represented across the two data sources
+regions1 <- unique(region_info$ROI_name) %>% sort()
+regions2 <- unique(study1.data$ROI_name) %>% sort()
+regions1 == regions2
+```
+
+```{r}
+# are the number of observations per region per subject expected? n_observations should be 24 per run, 96 for 4 runs
+study1.data %>%
+  group_by(top_n_voxels, subjectID, ROI_name) %>%
+  summarise(n_observations = n())
+
+# check for duplicates
+study1.data %>%
+  # filter(subjectID == "sub-SAXNES2s028") %>%
+  get_dupes(vector1_topVoxels_main_condition_copes) %>%
+  group_by(top_n_voxels, subjectID, ROI_name, extracted_run_number) %>%
+  summarise(n_duplicates = n()) 
+
+```
+
+```{r}
+str(study1.data)
+```
+
+## Join with visual statistic info
+```{r}
+# read in visual stats data
+vis_stats_info_exp1 <- read.csv(here("../../exp2/analysis_scripts/outputs/visual_statistics/visual_statistics_exp1_new.csv")) %>% select(-X, -domain, -task) %>%
+  filter(in_exp1 == TRUE) %>%
+  select(-value) %>%
+  pivot_wider(names_from = metric, values_from = normalized_value, id_cols = c(vis_statistics_video_group, event))
+
+study1.data.full <- left_join(study1.data, vis_stats_info_exp1, by = c("vis_statistics_video_group", "event")) %>%
+  # select(-X) %>%
+  filter(!is.na(top_n_voxels))  %>%
+  unite("video", c("domain", "task", "event"), remove = FALSE)
+
+# write_rds(study1.data.full, here("outputs/univariate_data/study1_univariate_data_singlebetas.Rds"))
+
+```
+
+
+## Summary statistics
+
+```{r cars}
+summary_task <-
+  summarySEwithin(
+    data = study1.data,
+    measurevar = "meanbeta",
+    withinvars = c("top_n_voxels", "ROI_name_final", "ROI_category", "focal_region", "old_ROI", "extracted_run_number", "domain", "task", "event"),
+    idvar = "subjectID"
+  )
+
+summary_domain <-
+  summarySEwithin(
+    data = study1.data,
+    measurevar = "meanbeta",
+    withinvars = c("top_n_voxels", "ROI_name_final", "ROI_category", "focal_region", "old_ROI", "extracted_run_number", "domain", "event"),
+    idvar = "subjectID"
+  )
+```
+
+```{r}
+# saveRDS(summary_domain, here("outputs", "univariate_descriptive_summaries", "study1_univariate_summary_domain_allvoxelN.Rds"))
+
+# saveRDS(summary_task, here("outputs", "univariate_descriptive_summaries", "study1_univariate_summary_task_allvoxelN.Rds"))
+```
+
+
+
+# (2) Set up multivariate data
+
+```{r}
+
+study1.data <- read_rds(here("outputs", "univariate_data", "study1_univariate_data_allvoxelN.Rds")) %>% 
+  filter(extracted_run_number == "run1",
+         top_n_voxels == 100) # run1 only
+
+# first we need to unpack vectors into their own columns 
+MVPA_vectors0 <- study1.data %>%
+  select(top_n_voxels,
+         focal_region,
+         subjectID,
+         ROI_name_final,
+         ROI_category,
+         extracted_run_number,
+         contrast_for_topVoxel_selection,
+         extracted_copes_main_condition,
+         domain,
+         task,
+         event,
+         rep,  ## only relevant for analysis that splits conditions by repetition (2 per run)
+         vector1_topVoxels_main_condition_copes)
+
+
+MVPA_vectors <- data.frame()
+top_vox <- 100
+
+for (n in top_vox) {
+  cur_subset <- MVPA_vectors0 %>%
+    filter(top_n_voxels == n)
+
+  for (i in 1:nrow(cur_subset)) {
+    # get all relevant info associated with each cope vector
+    top_n_voxels <- cur_subset$top_n_voxels[i]
+    focal_region <- cur_subset$focal_region[i]
+    subj <- cur_subset$subjectID[i]
+    ROI <- cur_subset$ROI_name_final[i]
+    ROI_category <- cur_subset$ROI_category[i]
+    selection_contrast <-
+      cur_subset$contrast_for_topVoxel_selection[i]
+    extracted_run_number <- cur_subset$extracted_run_number[i]
+    domain <- cur_subset$domain[i]
+    task <- cur_subset$task[i]
+    event <- cur_subset$event[i]
+    rep <- cur_subset$rep[i]  ## only relevant for analysis that splits conditions by repetition (2 per run)
+    cond <- cur_subset$extracted_copes_main_condition[i]
+
+    # get the cope vector and convert into cols (Vox1-100)
+    copes <- cur_subset$vector1_topVoxels_main_condition_copes[i] %>%
+      as.vector() %>%
+      str_split(., pattern = " ") %>%
+      flatten_chr() %>%
+      str_remove_all(., pattern = ",") %>%
+      str_remove_all(., pattern = "\n") %>%
+      str_remove_all(., pattern = "]") %>%
+      str_remove_all(., pattern = "\\[") %>%
+      as.numeric() %>%
+      na.omit() %>%
+      t() %>%
+      as.data.frame()
+
+    length_cope_actual <- length(copes)
+
+    cur.row <- cbind(
+      top_n_voxels,
+      length_cope_actual,
+      focal_region,
+      subj,
+      ROI,
+      selection_contrast,
+      extracted_run_number,
+      domain,
+      task,
+      event,
+      rep,
+      cond,
+      copes
+    )
+    newlist <- list(MVPA_vectors, cur.row)
+    MVPA_vectors <- rbindlist(newlist, fill = TRUE)
+    # MVPA_vectors <- plyr::rbind.fill(MVPA_vectors, cur.row)
+  }
+}
+
+
+
+# saveRDS(MVPA_vectors, here("outputs", "multivariate_data", "study1_multivariate_data_run1_allregions_top100.Rds"))
+```
+
+## Set up distances
+
+```{r}
+MVPA_vectors <- readRDS(here("outputs", "multivariate_data", "study1_multivariate_data_run1_allregions_top100.Rds"))
+
+str(MVPA_vectors)
+# are the number of observations per region per subject expected? n_observations should be 24
+sum(MVPA_vectors$length_cope_actual != MVPA_vectors$top_n_voxels)
+```
+
+```{r, include = FALSE}
+
+subjects <- levels(as.factor(MVPA_vectors$subj))
+ROIs <- levels(as.factor(MVPA_vectors$ROI))
+
+# z score vectors within voxels within ROIs within subjects
+MVPA_vectors_zscored0 <- MVPA_vectors %>%
+  filter(top_n_voxels == "100") %>%
+  select(1:112) %>%
+  gather(voxel, beta, V1:V100) %>%
+  group_by(subj, ROI, voxel) %>%
+  mutate(zscore_perROI_persubj = (beta - mean(beta)) / sd(beta)) %>%   
+  ungroup() %>% 
+  as.data.frame()
+
+MVPA_vectors_zscored <- MVPA_vectors_zscored0 %>%
+  select(-beta) %>% 
+  spread(voxel, zscore_perROI_persubj)
+
+# saveRDS(MVPA_vectors_zscored, here("outputs", "multivariate_data", "study1_multivariate_data_zscored_allregions_top100.Rds"))
+```
+
+```{r, include = FALSE}
+
+MVPA_data <-
+  readRDS(here("outputs",
+               "multivariate_data",
+               "study1_multivariate_data_run1_allregions_top100.Rds")) %>%
+  filter(extracted_run_number == "run1")
+
+MVPA_data_zscored <-
+  readRDS(here("outputs", 
+               "multivariate_data",
+               "study1_multivariate_data_zscored_run1_allregions_top100.Rds")
+  )
+
+
+distance_metrics <- c("Euclidean", "Pearson")
+labels <- c('euclidean', 'pearson')
+
+ROIs <- unique(sort(MVPA_data$ROI))
+subjects <- unique(sort(MVPA_data$subj))
+
+top_nox <- 100
+for (distance_metricI in 1:length(distance_metrics)) {
+  distance_metric <- distance_metrics[distance_metricI]
+  distance_metric_lower <- tolower(distance_metric)
+  distance_metric_label <- labels[distance_metricI]
+  
+  # initialize final CSV output
+  similarity_output_matrix <- data.frame()
+  
+  # GET EMPIRICAL RDMS
+  # for each subject and ROI...
+  for (i in 1:length(subjects)) {
+    for (k in 1:length(ROIs)) {
+      for (n in top_vox) {
+        # get data specific to subject and ROI
+        
+        last_vox_column <- paste0("V", n)
+        subjROIdata <- MVPA_data_zscored %>%
+          filter(subj == subjects[i],
+                 event != "fam", # only take test events
+                 ROI == ROIs[k],
+                 top_n_voxels == n) %>%
+          select(domain, task, event, cond, V1:all_of(last_vox_column)) %>%
+          select(-domain,-task,-event) %>%
+          as.data.frame()
+        
+        row.names(subjROIdata) <- subjROIdata$cond
+        
+        subjROIdata.final <- subjROIdata %>% select(-cond)
+        
+        # pearson
+        if (distance_metric == 'Pearson') {
+          distmatrix <-
+            1 - cor(t(subjROIdata.final)) # convert similarity into a distance (1-r)
+        }
+        
+        # euclidian
+        if (distance_metric == 'Euclidean') {
+          distmatrix <-
+            dist(
+              subjROIdata.final,
+              method = "euclidean",
+              diag = TRUE,
+              upper = TRUE
+            ) %>% as.matrix()
+        }
+        
+        cur.subset <- distmatrix %>%
+          as.data.frame() %>%
+          # select(-subj, -ROI, -dist) %>%
+          flattenCorrMatrix(.) %>%
+          unite(pair,
+                c(row, column),
+                sep = "-vs-",
+                remove = FALSE) %>%
+          rename(dist = cor) %>%
+          mutate(subj = subjects[i],
+                 ROI = ROIs[k],
+                 distance_metric = distance_metric_label,
+                 top_n_voxels = n)
+        similarity_output_matrix <-
+          rbind(similarity_output_matrix, cur.subset)
+      }
+    }
+  }
+  # save out RDM.empirical.model.distZ.all_iters
+  fname =  paste0(
+    here("outputs", "multivariate_data"),
+    "MVPA_subject_RDMs_top100_",
+    distance_metric,
+    "_z.Rds",
+    sep = ""
+  )
+  
+  # saveRDS(similarity_output_matrix, fname)
+}
+
+```
+
+```{r}
+MVPA_subject_RDMs_Euclidean_zscored <- readRDS(here("outputs/multivariate_data/study1_MVPA_subject_RDMs_top100_Euclidean_z.Rds")) %>%
+  mutate(distance_metric = "euclidean_zscored")
+
+MVPA_subject_RDMs_Euclidean <- readRDS(here("outputs/multivariate_data/study1_MVPA_subject_RDMs_top100_Euclidean.Rds")) %>%
+  mutate(distance_metric = "euclidean")
+
+MVPA_subject_RDMs_Pearson_zscored <- readRDS(here("outputs/multivariate_data/study1_MVPA_subject_RDMs_top100_Pearson_z.Rds")) %>%
+  mutate(distance_metric = "pearson_zscored")
+
+MVPA_subject_RDMs_Pearson <- readRDS(here("outputs/multivariate_data/study1_MVPA_subject_RDMs_top100_Pearson.Rds")) %>%
+  mutate(distance_metric = "pearson")
+
+MVPA_combined_RDMs <- rbind(MVPA_subject_RDMs_Euclidean_zscored,
+                            MVPA_subject_RDMs_Euclidean,
+                            MVPA_subject_RDMs_Pearson_zscored,
+                            MVPA_subject_RDMs_Pearson) %>%
+  separate(row,
+           c("row_domain", "row_task", "row_event", "row_rep"),
+           remove = FALSE) %>%
+  separate(column,
+           c("column_domain", "column_task", "column_event", "column_rep"),
+           remove = FALSE) %>%
+  # for this col, we want to label all events matching on domain as within, not matching as between, and to drop adjacent test events
+  mutate(pair_label_domain =
+           case_when(
+             ((row_task == column_task) &
+                (row_rep == column_rep) & (row_event != column_event)
+             ) ~ "drop",
+             (row_domain == column_domain) ~ "within",
+             TRUE ~ "between"
+           )) %>%
+  
+  # for this col, we want to label all events matching on event as within, not matching as between, and to drop adjacent test events
+  mutate(pair_label_event =
+           case_when(
+             ((row_task == column_task) &
+                (row_rep == column_rep) & (row_event != column_event)
+             ) ~ "drop",
+             (row_event == column_event) ~ "within",
+             TRUE ~ "between"
+           )) %>%
+  
+  # same as matching by event, except we drop labels from the opposite domain
+  mutate(
+    pair_label_event_within_domain =
+      case_when(
+        ((row_task == column_task) &
+           (row_rep == column_rep) & (row_event != column_event)
+        ) ~ "drop",
+        
+        # same domain and event
+        (pair_label_domain == "within" &
+           pair_label_event == "within") ~ "within",
+        
+        # same domain, different event
+        (pair_label_domain == "within" &
+           pair_label_event == "between") ~ "between",
+        
+        # drop opposite domain
+        pair_label_domain == "between" ~ "drop_domain"
+      )
+  ) %>%
+  
+  # domains within events (rather than events within domains)
+  mutate(
+    pair_label_domain_within_event =
+      case_when(
+        ((row_task == column_task) &
+           (row_rep == column_rep) & (row_event != column_event)
+        ) ~ "drop",
+        
+        # same domain, same event
+        (pair_label_domain == "within" &
+           pair_label_event == "within") ~ "within",
+        
+        # opposite domain
+        (pair_label_domain == "between" &
+           pair_label_event == "within")  ~ "between",
+        
+        # drop opposite event
+        (pair_label_event == "between") ~ "drop_event"
+      )
+  ) %>%
+  
+  # events ACROSS domains (true "domain general" metric)
+  mutate(
+    pair_label_event_across_domains =
+      case_when(
+        ((row_task == column_task) &
+           (row_rep == column_rep) & (row_event != column_event)
+        ) ~ "drop",
+        
+        # same event, opposite domain
+        (pair_label_domain == "between" &
+           pair_label_event == "within") ~ "within",
+        
+        # different event, different domain
+        (pair_label_domain == "between" &
+           pair_label_event == "between")  ~ "between",
+        
+        # drop opposite event
+        TRUE ~ "drop_event"
+      )
+  ) %>%
+  
+  # domains ACROSS events (true "event general" metric)
+  mutate(
+    pair_label_domains_across_events =
+      case_when(
+        ((row_task == column_task) &
+           (row_rep == column_rep) & (row_event != column_event)
+        ) ~ "drop",
+        
+        # same domain, opposite event
+        (pair_label_event == "between" &
+           pair_label_domain == "within") ~ "within",
+        
+        # different domain, different event
+        (pair_label_event == "between" &
+           pair_label_domain == "between")  ~ "between",
+        
+        # drop opposite event
+        TRUE ~ "drop_event"
+      )
+  ) %>%
+  
+  mutate(same_domain = case_when(
+    (
+      # pair_label_dspecific_task != "drop_domain" |
+        pair_label_event_within_domain != "drop_domain"
+     & pair_label_domain == "within") ~ row_domain
+  )) %>%
+  
+  mutate(
+    same_event = case_when(
+      pair_label_domain_within_event != "drop_event" &
+        pair_label_event == "within" ~ row_event
+    )
+  ) %>%
+  
+  relocate(pair, .after = last_col())
+
+
+```
+
+```{r, include = TRUE}
+ROIs <- levels(as.factor(MVPA_combined_RDMs$ROI))
+subjects <- levels(as.factor(MVPA_combined_RDMs$subj))
+
+RDMs <-
+  c(
+    "pair_label_event_within_domain",
+    "pair_label_domain_within_event",
+    "pair_label_event_across_domains",
+    "pair_label_domains_across_events"
+  )
+
+MVPA_combined_RDMs_out0 <- MVPA_combined_RDMs %>%
+  rename(ROI_name_final = ROI) %>%
+  mutate_at(RDMs, as.factor) %>%
+  mutate_at(RDMs, relev)
+
+MVPA_combined_RDMs_out <-
+  full_join(MVPA_combined_RDMs_out0, region_info, by = c("ROI_name_final")) 
+
+MVPA_combined_RDMs_out$ROI_category <-
+  factor(
+    MVPA_combined_RDMs_out$ROI_category,
+    levels = c("physics", "psychology", "MD", "early_visual")
+  )
+
+MVPA_combined_RDMs_out$distance_metric <-
+  factor(
+    MVPA_combined_RDMs_out$distance_metric,
+    levels = c("euclidean", "euclidean_zscored", "pearson", "pearson_zscored")
+  )
+
+# saveRDS(MVPA_combined_RDMs_out, here("outputs/multivariate_data/study1_MVPA_processed_distances_top100.Rds"))
+```
+
+
+## Noise ceiling
+
+## Compute the noise ceiling per ROI
+
+```{r}
+study1_distances <- readRDS(here("outputs/multivariate_data/study1_MVPA_processed_distances_top100.Rds"))
+str(study1_distances)
+
+subjects <- unique(study1_distances$subj)
+ROIs <- unique(study1_distances$ROI_name_final)
+```
+
+```{r}
+
+study1_distances_final <- study1_distances %>%
+      filter(distance_metric == "euclidean",
+             str_detect(pair, "fam", negate = TRUE))
+
+noise_ceiling_acrossrun <- data.frame()
+
+euclidean_dist <- function(x, y) sqrt(sum((x - y)^2))
+
+
+for (ROI in ROIs) {
+  for (subject in subjects) {
+    
+    # current subject
+    cur_subject <- study1_distances_final %>%
+      filter(subj == subject,
+             ROI_name_final == ROI) %>%
+      select(pair, dist) %>%
+      arrange(pair)
+
+    # everyone including current subject
+    everyone <- study1_distances_final %>%
+      filter(ROI_name_final == ROI) %>%
+      group_by(pair) %>%
+      summarise(dist_avg_everyone = mean(dist)) %>%
+      arrange(pair)
+    
+    # everyone except the current subject    
+    everyone_else <- study1_distances_final %>%
+      filter(subj != subject,
+             ROI_name_final == ROI) %>%
+      group_by(pair) %>%
+      summarise(dist_avg_everyonebutX = mean(dist)) %>%
+      arrange(pair)
+    
+    # compute lower bound noise ceiling, excluding cur subj
+    euclidean_cur_iteration_lowerbound <-
+      euclidean_dist(cur_subject$dist,
+          everyone_else$dist_avg_everyonebutX)
+    
+    kendall_cur_iteration_lowerbound <-
+      cor(cur_subject$dist,
+          everyone_else$dist_avg_everyonebutX,
+          method = "kendall")
+    
+    # compute upper bound noise ceiling, including cur subj
+    euclidean_cur_iteration_upperbound <-
+      euclidean_dist(cur_subject$dist,
+          everyone$dist_avg_everyone)
+    
+    kendall_cur_iteration_upperbound <-
+      cor(cur_subject$dist,
+          everyone$dist_avg_everyone,
+          method = "kendall")
+    
+    cur_row <-
+      cbind(subject, 
+            ROI, 
+            euclidean_cur_iteration_lowerbound,
+            euclidean_cur_iteration_upperbound,
+            kendall_cur_iteration_lowerbound,
+            kendall_cur_iteration_upperbound
+      )
+    
+    noise_ceiling_acrossrun <- rbind(noise_ceiling_acrossrun, cur_row)
+  }
+}
+
+        
+
+noise_ceiling_average_acrossrun <- noise_ceiling_acrossrun %>%
+  mutate_at(c("kendall_cur_iteration_lowerbound",
+              "kendall_cur_iteration_upperbound",
+              "euclidean_cur_iteration_lowerbound",
+              "euclidean_cur_iteration_upperbound"), as.numeric) %>%
+  group_by(ROI) %>%
+  summarise(kendall_ceiling_lowerbound_avg = mean(kendall_cur_iteration_lowerbound),
+            kendall_ceiling_upperbound_avg = mean(kendall_cur_iteration_upperbound),
+            euclidean_ceiling_lowerbound_avg = mean(euclidean_cur_iteration_lowerbound),
+            euclidean_ceiling_upperbound_avg = mean(euclidean_cur_iteration_upperbound))
+
+noise_ceiling_average_acrossrun_long <- noise_ceiling_average_acrossrun %>%
+  gather(metric, value, kendall_ceiling_lowerbound_avg:euclidean_ceiling_upperbound_avg) %>%
+  mutate(cor_metric = case_when(str_detect(metric, "kendall") ~ "kendall",
+                                str_detect(metric, "euclidean") ~ "euclidean"
+         ),
+         upper_lower = case_when(str_detect(metric, "lower") ~ "lower",
+                                 str_detect(metric, "upper") ~ "upper"))
+```
+
+```{r}
+noise_ceiling_average_acrossrun_long_lower_upper <- noise_ceiling_average_acrossrun_long %>%
+  pivot_wider(id_cols = c("ROI", "cor_metric"), names_from = c("upper_lower")) %>%
+  group_by(ROI, cor_metric) %>%
+  mutate(average = mean(c(lower, upper))) %>%
+  ungroup() %>%
+    rename(noiseceiling_lower = lower,
+         noiseceiling_upper = upper,
+         noiseceiling_average = average,
+         ROI_name_final = ROI)
+
+
+noise_ceiling_average_acrossrun_long_lower_upper_final <- left_join(noise_ceiling_average_acrossrun_long_lower_upper, region_info)
+```
+
+```{r}
+# write_rds(noise_ceiling_average_acrossrun_long_lower_upper_final, path = here("outputs/multivariate_analysis_outputs/MVPA_noiseceiling_perROI.Rds"))
+```
+

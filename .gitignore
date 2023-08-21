@@ -2,9 +2,10 @@
 arrays/
 couhes/
 exp1/pre-reg
-exp1/analysis_scripts/deprecated
-exp1/analysis_scripts/event_scripts
-exp1/analysis_scripts/input_data
+exp1/analysis_scripts/deprecated/
+exp1/analysis_scripts/event_scripts/
+exp1/analysis_scripts/input_data/
+exp1/analysis_scripts/vis_statistics/
 exp1/experiment_scripts/event_files/
 exp1/experiment_scripts/stim/
 exp2/pre-reg
