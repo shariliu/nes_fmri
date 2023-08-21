@@ -1,0 +1,4 @@
+*.pdf
+data/*test*
+data/junk
+data/*TEST*

@@ -1,0 +1,334 @@
+<head>
+    <title>DOTSLoc</title>
+    <script src="../jspsych-6.3.1/jspsych.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-video-keyboard-response.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-preload.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-instructions.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-survey-text.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-audio-button-response.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-audio-keyboard-response.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-audio-slider-response.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-fullscreen.js"></script>
+
+    <link href="../jspsych-6.3.1/css/jspsych.css" rel="stylesheet" type="text/css">
+    <link href="../jspsych-6.3.1/css/extra.css" rel="stylesheet" type="text/css">
+
+    <script src="utils.js"></script>
+    <script src="dots_trials.js"></script>
+
+</head>
+
+<body>
+</body>
+
+<script>
+    // STIPULATE WHICH CONDITION CURRENT EXPT SESSION WILL BE
+    const subj_ID = "SAXE_NES2_s001"; // SAXE_NES2_s00x
+    const run_number = 1; // 1 or 2
+
+    const video_list = 1; //1 or 2
+    const block_order = 1; // 1 or 2
+
+
+    // CONSTANTS - none of these should be touched
+    var exptName = "DOTSloc_Exp2";
+    var ISI = 1500; // for post_trial_gap (NOT included in calculations of time_elapsed!)
+    var scanScreenWidth = 1280; // specific to T1 at McGovern
+    var scanScreenHeight = 1024; // specific to T1 at McGovern
+    var vidheight = screen.height * .95;
+    var Keys = {
+        PAUSE: 'p',
+        RESUME: 'r',
+        QUIT: 'q'
+    };
+
+    // SCANNER TRIGGER
+    var scannerTrigger = {
+        type: 'html-keyboard-response',
+        stimulus: 'Videos will begin shortly!',
+        choices: ['+', 'Add', '5'], // scanner sends a + as keyboard input, which triggers a run to begin
+        data: {
+            trialtype: 'blockstart'
+        },
+        on_finish: function (data) {
+            data.trial_start = data.time_elapsed - data.trial_duration;
+            data.blockstart_time = data.time_elapsed;
+        }
+    };
+
+    // FISCHER DOTS TASK
+    // BEGINNING AND END OF EVERY RUN
+
+    var welcome_dots = {
+        type: 'instructions',
+        pages: [
+            'Note to Shari: Click into Firefox',
+            'DotsSocPhys, ' + subj_ID + ', block' + block_order + ', run ' + run_number,
+            'Please hold your head still, and pay attention to the videos. ' +
+            'You will see a top-down view of two dots moving. One of them will become invisible ' +
+            'for a short period of time. Imagine its motion during this time.' +
+            'Your task is to judge, as soon as the it reappears, whether the final frame ' +
+            'of the video matches your prediction.' +
+            '<p>Index finger = YES ---------- Middle finger = NO </p>' +
+            '<p>Ready to begin?</p>'
+        ],
+        key_forward: 'Enter',
+        on_finish: function (data) {
+            data.trial_start = data.time_elapsed - data.trial_duration;
+            jsPsych.data.addProperties({
+                experimentName: exptName,
+                sessionDate: new Date().toLocaleDateString(),
+                sessionTime: new Date().toLocaleTimeString(),
+                participant: subj_ID,
+                block_order: block_order,
+                run_number: run_number,
+                video_list: video_list
+            });
+        }
+    };
+
+    var all_done = {
+        type: 'instructions',
+        pages: ['All done with: DotsSocPhys, ' + subj_ID + ', block' + block_order + ', run ' + run_number +
+            ' of 2'
+        ],
+        key_forward: 'Enter',
+        data: {
+            trialtype: 'all_done'
+        },
+        on_finish: function (data) {
+            // calculate trial starts (time_elapsed does not include post_trial_gap)
+            data.trial_start = data.time_elapsed - data.trial_duration;
+            var trials = jsPsych.data.get().filter({
+                trialtype: 'non-rest'
+            });
+            var correct_trials = trials.filter({
+                correct: true
+            });
+            jsPsych.data.addProperties({
+                accuracy: Math.round(correct_trials.count() / trials.count() * 100),
+            });
+            jsPsych.data.get().localSave('csv', exptName + '_' + subj_ID + "_run" + run_number +
+                "_videolist" + video_list + "_blockorder" + block_order + '.csv');
+        }
+    }
+
+    var list1_properties = ['social.barriers.c.2', 'social.barriers.c.4', 'social.barriers.c.6', 'social.barriers.c.10',
+        'social.barriers.i.1', 'social.barriers.i.3', 'social.barriers.i.7', 'social.barriers.i.9',
+        'social.nobarriers.c.1', 'social.nobarriers.c.5', 'social.nobarriers.c.7', 'social.nobarriers.c.9',
+        'social.nobarriers.i.2', 'social.nobarriers.i.6', 'social.nobarriers.i.8', 'social.nobarriers.i.10',
+        'physics.barriers.c.2', 'physics.barriers.c.4', 'physics.barriers.c.6', 'physics.barriers.c.10',
+        'physics.barriers.i.1', 'physics.barriers.i.3', 'physics.barriers.i.7', 'physics.barriers.i.9',
+        'physics.nobarriers.c.1', 'physics.nobarriers.c.5', 'physics.nobarriers.c.7', 'physics.nobarriers.c.9',
+        'physics.nobarriers.i.2', 'physics.nobarriers.i.6', 'physics.nobarriers.i.8', 'physics.nobarriers.i.10'
+    ]
+
+    var list2_properties = ['social.barriers.c.1', 'social.barriers.c.5', 'social.barriers.c.7', 'social.barriers.c.9',
+        'social.barriers.i.2', 'social.barriers.i.4', 'social.barriers.i.6', 'social.barriers.i.8',
+        'social.nobarriers.c.2', 'social.nobarriers.c.6', 'social.nobarriers.c.8', 'social.nobarriers.c.10',
+        'social.nobarriers.i.1', 'social.nobarriers.i.3', 'social.nobarriers.i.5', 'social.nobarriers.i.7',
+        'physics.barriers.c.1', 'physics.barriers.c.5', 'physics.barriers.c.7', 'physics.barriers.c.9',
+        'physics.barriers.i.2', 'physics.barriers.i.4', 'physics.barriers.i.6', 'physics.barriers.i.8',
+        'physics.nobarriers.c.2', 'physics.nobarriers.c.6', 'physics.nobarriers.c.8', 'physics.nobarriers.c.10',
+        'physics.nobarriers.i.1', 'physics.nobarriers.i.3', 'physics.nobarriers.i.5', 'physics.nobarriers.i.7'
+    ]
+
+
+    // shuffle and select trials for current session
+    function select_dot_trials(video_list, block_order) {
+
+        // lists are balanced to equate for difficulty (see SM of Fischer et al. (2016))
+        var video_list_1 = dots_trials.filter(({
+            video_id
+        }) => list1_properties.includes(video_id));
+
+        var video_list_2 = dots_trials.filter(({
+            video_id
+        }) => list2_properties.includes(video_id));
+
+        if (video_list == 1) {
+            var current_dots_list = video_list_1;
+        } else if (video_list == 2) {
+            var current_dots_list = video_list_2;
+        };
+
+        var social_dots = current_dots_list.filter(({
+            domain
+        }) => domain === "social");
+        var physics_dots = current_dots_list.filter(({
+            domain
+        }) => domain === "physics");
+
+        var social_trials = jsPsych.randomization.shuffle(social_dots);
+        var physics_trials = jsPsych.randomization.shuffle(physics_dots);
+
+
+        console.log("social: ", social_trials);
+        console.log("physics: ", physics_trials);
+        var run_dots1 = [social_trials[0], social_trials[1],
+            physics_trials[0], physics_trials[1],
+            social_trials[2], social_trials[3],
+            social_trials[4], social_trials[5],
+            physics_trials[2], physics_trials[3],
+            physics_trials[4], physics_trials[5],
+            social_trials[6], social_trials[7],
+            physics_trials[6], physics_trials[7],
+            physics_trials[8], physics_trials[9],
+            social_trials[8], social_trials[9],
+            physics_trials[10], physics_trials[11],
+            physics_trials[12], physics_trials[13],
+            social_trials[10], social_trials[11],
+            social_trials[12], social_trials[13],
+            physics_trials[14], physics_trials[15],
+            social_trials[14], social_trials[15]
+        ];
+        var run_dots2 = [physics_trials[0], physics_trials[1],
+            social_trials[0], social_trials[1],
+            physics_trials[2], physics_trials[3],
+            physics_trials[4], physics_trials[5],
+            social_trials[2], social_trials[3],
+            social_trials[4], social_trials[5],
+            physics_trials[6], physics_trials[7],
+            social_trials[6], social_trials[7],
+            social_trials[8], social_trials[9],
+            physics_trials[8], physics_trials[9],
+            social_trials[10], social_trials[11],
+            social_trials[12], social_trials[13],
+            physics_trials[10], physics_trials[11],
+            physics_trials[12], physics_trials[13],
+            social_trials[14], social_trials[15],
+            physics_trials[14], physics_trials[15]
+        ];
+        if (block_order == 1) {
+            return run_dots1;
+        } else if (block_order == 2) {
+            return run_dots2;
+        }
+    }
+
+    var curDotTrials = select_dot_trials(video_list, block_order)
+    console.log('selected dot trials: ', curDotTrials);
+
+    var firstHalf = curDotTrials.slice(0, 16)
+    var secondHalf = curDotTrials.slice(16, 32)
+
+    console.log('first half: ', firstHalf);
+    console.log('second half: ', secondHalf);
+
+    function make8DotBlocks(dotList) {
+        var blockof8 = {
+            type: 'video-keyboard-response',
+            timeline: [{
+                stimulus: [jsPsych.timelineVariable('path')]
+            }],
+            choices: ['1', '2', 'p', 'q', 'r'],
+            controls: false,
+            trial_ends_after_video: false,
+            response_ends_trial: false,
+            height: vidheight,
+            post_trial_gap: 1500,
+            stop: 10000,
+            trial_duration: 11500,
+            timeline_variables: dotList,
+            save_trial_parameters: {
+                trial_duration: true,
+                stimulus: true,
+                post_trial_gap: true,
+            },
+            data: {
+                trialtype: 'non-rest',
+                barriers: jsPsych.timelineVariable('barriers'),
+                correct_ending: jsPsych.timelineVariable('correct_ending'),
+                domain: jsPsych.timelineVariable('domain')
+            },
+            on_finish: function (data) {
+                // calculate trial starts (time_elapsed does not include post_trial_gap)
+                data.trial_start = data.time_elapsed - data.trial_duration;
+
+                // collect information about task
+                if (data.correct_ending == 1) {
+                    if (jsPsych.pluginAPI.compareKeys(data.response, '1')) {
+                        data.correct = true;
+                    }
+                    if (jsPsych.pluginAPI.compareKeys(data.response, '2')) {
+                        data.correct = false;
+                    };
+                } else if (data.correct_ending == 0) {
+                    if (jsPsych.pluginAPI.compareKeys(data.response, '2')) {
+                        data.correct = true;
+                    }
+                    if (jsPsych.pluginAPI.compareKeys(data.response, '1')) {
+                        data.correct = false;
+                    }
+                }
+            }
+        }
+        return blockof8;
+    }
+
+    // group 2 movies together into a block
+    // var dot_block = {
+    //     timeline: [dot_trial, dot_trial]
+    // }
+
+    var rest_block = {
+        type: 'html-keyboard-response',
+        stimulus: `<div style="width:${vidheight}px;height:${vidheight}px; background-color:#000;"></div>`,
+        choices: jsPsych.NO_KEYS,
+        response_ends_trial: false,
+        trial_duration: 26000, // same duration as movie block
+        post_trial_gap: 0,
+        data: {
+            trialtype: 'rest'
+        },
+        save_trial_parameters: {
+            trial_duration: true,
+            post_trial_gap: true
+        },
+        on_finish: function (data) {
+            // calculate trial starts (time_elapsed does not include post_trial_gap)
+            data.trial_start = data.time_elapsed - data.trial_duration;
+        }
+    }
+
+    function make_dot_run() {
+        var dot_run_structure = {
+            timeline: [
+                welcome_dots,
+                scannerTrigger,
+                rest_block,
+                make8DotBlocks(firstHalf),
+                rest_block,
+                make8DotBlocks(secondHalf),
+                rest_block
+            ]
+        }
+        return dot_run_structure
+    }
+
+    // TIMELINE
+    var timeline = [];
+
+    timeline.push({
+        type: 'fullscreen',
+        fullscreen_mode: true
+    });
+
+    timeline.push(make_dot_run());
+
+    timeline.push(all_done);
+
+    jsPsych.init({
+        timeline: timeline,
+        use_webaudio: false,
+        override_safe_mode: true,
+        on_finish: function (data) {
+            jsPsych.data.displayData();
+            jsPsych.data.get().localSave('csv', exptName + '_' + subj_ID + "_run" + run_number +
+                "_videolist" + video_list + "_blockorder" + block_order + '_copy2.csv');
+        }
+    })
+</script>
+
+</html>

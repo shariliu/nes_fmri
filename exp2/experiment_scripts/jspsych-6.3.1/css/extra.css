@@ -1,0 +1,12 @@
+body {
+  background-color: grey;
+}
+
+.jspsych-display-element {
+  font-size: 36px;
+  color: black;
+}
+
+.frame-border {
+  border: 5px solid #FF0000
+}

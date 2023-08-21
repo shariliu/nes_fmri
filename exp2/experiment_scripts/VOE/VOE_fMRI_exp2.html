@@ -1,0 +1,392 @@
+<!-- Task Documentation: Surprising outcomes in intuitive physics and psychology -->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>VOE Experiment 2</title>
+    <script src="../jspsych-6.3.1/jspsych.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-video-keyboard-response.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-image-keyboard-response.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-preload.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-instructions.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-survey-text.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-survey-likert.js"></script>
+    <script src="../jspsych-6.3.1/plugins/jspsych-fullscreen.js"></script>
+    <link href="../jspsych-6.3.1/css/jspsych.css" rel="stylesheet" type="text/css">
+    <link href="../jspsych-6.3.1/css/extra.css" rel="stylesheet" type="text/css">
+    <script src="stimulus_schedules/voe_exp2_schedules_final.json"></script>
+
+
+</head>
+
+<script>
+    // subj and run number
+
+    const subj_ID = "SAXE_NES2_s001"; // SAXE_NES2_s00x
+    const run_number = 4; // 1 2 3 or 4
+
+    // Scanner button box
+    // blue 1
+    // yellow 2
+    // green 3
+    // red 4
+
+    // CONSTANTS - none of these should be touched
+    const stim_path = 'voe_stimuli/';
+    const exptName = "VOE_Exp2";
+
+    const ISI = 250; // for post_trial_gap (NOT included in calculations of time_elapsed!)
+    var scanScreenWidth = 1280; // specific to T1 at McGovern
+    var scanScreenHeight = 1024; // specific to T1 at McGovern
+    const vidwidth = scanScreenWidth * 0.95;
+
+    const totalVideoTime = 7500; // total length of video including freeze frame;
+
+    const regular_fixation = '<div style="font-size:120px;">+</div>';
+    const attn_prompt = '<div style="font-size:40px;">Was this in the last pair of videos?</div>';
+
+    // for pausing the experiment
+    var Keys = {
+        PAUSE: 'p',
+        RESUME: 'r',
+        QUIT: 'q'
+    };
+
+    // subset trials for this subject and run
+    var trials_this_subject = all_trials.filter(x => x.subjID === subj_ID);
+    var trials_this_run = trials_this_subject.filter(x => x.run_n === run_number);
+
+    // fun for choosing a trial other than the current one
+    function get_other_trial(path, domain) {
+        var other_trials_both_domains = trials_this_run.filter(function (x) {
+            return !x.path.includes(path);
+        });
+        var other_trials = other_trials_both_domains.filter(function (x) {
+            return x.domain.includes(domain);
+        });
+        // console.log(other_trials);
+        var other_trial = jsPsych.randomization.sampleWithReplacement(other_trials, 1);
+        return (other_trial)
+    };
+
+    // select image for attention check
+    function select_image(true_false) {
+        var cur_path = jsPsych.timelineVariable('path');
+        // console.log("Current trial " + cur_path);
+
+        // 50% of the time, ask about the last trial
+        if (true_false) {
+            // console.log("Image of current trial will be selected")
+
+            var trial_path = stim_path + cur_path + '/';
+            var trial_img_1 = jsPsych.timelineVariable('img1');
+            var trial_img_2 = jsPsych.timelineVariable('img2');
+        } else {
+            // console.log("Image from different trial will be selected")
+
+            // else, ask about any other trial
+            var other_trial = get_other_trial(jsPsych.timelineVariable('path'), jsPsych.timelineVariable('domain'));
+            // console.log(trials_this_run);
+            // console.log("Other possible trials: " + other_trials)
+
+            var trial_path = stim_path + other_trial[0].path + '/';
+            var trial_img_1 = other_trial[0].img1;
+            var trial_img_2 = other_trial[0].img2;
+            // console.log("Possible images :", [trial_img_1, trial_img_2])
+
+        };
+
+        // var trial_imgs = [trial_img_1, trial_img_2];
+        // console.log("Possible images: " + trial_imgs)
+        var selected_image = jsPsych.randomization.sampleWithReplacement([trial_img_1, trial_img_2], 1);
+        // console.log("Selected image", selected_image);
+
+        var selected_image_path = trial_path + selected_image;
+        // console.log("Selected image path: ", selected_image_path)
+
+        return {
+            selected_image: selected_image_path,
+            correct_answer: true_false
+        };
+    }
+
+
+    var makeFamTestStimulus = function (propName) {
+        var str = jsPsych.timelineVariable(propName);
+        return [`${stim_path}${str}`]
+    }
+
+    // fam and test event structure
+    var fam_test = {
+        on_start: function (trial) {
+            console.log("Current trial:", jsPsych.timelineVariable("path"), jsPsych.timelineVariable("event"));
+            // console.log("Fam stimulus: ", stim_path, jsPsych.timelineVariable('fampath'));
+            // console.log("Test stimulus: ", stim_path, jsPsych.timelineVariable('testpath'));
+
+        },
+        type: 'video-keyboard-response',
+        timeline: [{
+                stimulus: function () {
+                    return makeFamTestStimulus('fampath')
+                }
+            },
+            {
+                stimulus: function () {
+                    return makeFamTestStimulus('testpath');
+                }
+            }
+        ],
+        controls: false,
+        trial_ends_after_video: false,
+        response_ends_trial: false,
+        choices: ['p', 'r', 'q'],
+        width: vidwidth,
+        post_trial_gap: ISI,
+        trial_duration: totalVideoTime,
+        // timeline_variables: voe_trials,
+        data: {
+            trialtype: 'voe',
+            post_trial_gap: ISI,
+        }
+    };
+
+
+    var attention_check = {
+        on_start: function (trial) {
+            trial.correct_answer = jsPsych.randomization.sampleWithReplacement([true, false], 1)[0];
+            if (trial.correct_answer == true) {
+                trial.correct_button_response = '1';
+            } else {
+                trial.correct_button_response = '2';
+            }
+            // console.log("Correct answer: ", trial.correct_answer);
+            // console.log("Correct button response: ", trial.correct_button_response);
+
+            var cur_image = select_image(trial.correct_answer);
+            trial.stimulus = cur_image.selected_image;
+        },
+        type: 'image-keyboard-response',
+        stimulus: [''],
+        prompt: attn_prompt,
+        controls: false,
+        stimulus_height: 400,
+        choices: ['1', '2'],
+        stimulus_duration: 2000,
+        trial_duration: 2000,
+        response_ends_trial: false,
+        save_trial_parameters: {
+            stimulus: true,
+            stimulus_duration: true,
+            correct_answer: true,
+            correct_button_response: true,
+        },
+        data: {
+            trialtype: 'check',
+            trial_duration: 2000
+        },
+        on_finish: function (data) {
+
+            if (data.response != null) {
+                if (jsPsych.pluginAPI.compareKeys(data.response, data.correct_button_response)) {
+                    data.subject_correct = true;
+                } else {
+                    data.subject_correct = false;
+                }
+            } else {
+                data.subject_correct = null;
+            }
+            console.log("Subject's response: ", data.response, "(Correct = ", data.subject_correct,
+                ")");
+        }
+    };
+
+
+
+    var fixation = {
+        on_start: function (trial) {
+            trial.trial_duration = jsPsych.timelineVariable("fixation_duration") * 1000;
+        },
+        type: 'html-keyboard-response',
+        stimulus: regular_fixation,
+        choices: ['p', 'r', 'q'],
+        response_ends_trial: false,
+        trial_duration: [],
+        data: {
+            trialtype: 'fixation'
+        }
+    }
+
+    var tensecrest = {
+        type: 'html-keyboard-response',
+        stimulus: regular_fixation,
+        choices: ['p', 'r', 'q'],
+        response_ends_trial: false,
+        trial_duration: 10000,
+        data: {
+            trialtype: 'fixation'
+        },
+        save_trial_parameters: {
+            trial_duration: true,
+            trialtype: true,
+            stimulus: true
+        }
+    }
+
+
+    // put together procedure for running trials
+    function makeTrials() {
+        var trialStructure = {
+            timeline: [
+                fam_test,
+                fixation,
+                attention_check,
+            ],
+            timeline_variables: trials_this_run,
+            save_trial_parameters: {
+                trial_duration: true,
+                stimulus: true,
+                // post_trial_gap: true
+            },
+            data: {
+                subj_ID: subj_ID,
+                run: jsPsych.timelineVariable("run_n"),
+                trial_n: jsPsych.timelineVariable("trial_n"),
+                domain: jsPsych.timelineVariable('domain'),
+                task: jsPsych.timelineVariable('task'),
+                scenario_string: jsPsych.timelineVariable('scenario_string'),
+                scenario: jsPsych.timelineVariable('scenario'),
+                event: jsPsych.timelineVariable('event'),
+                identical_tests: jsPsych.timelineVariable('identical_tests'),
+                stim_ID: jsPsych.timelineVariable('stim_ID'),
+                cond_ID: jsPsych.timelineVariable('cond_ID'),
+                first_second: jsPsych.timelineVariable('first_second'),
+                stimulus_path: jsPsych.timelineVariable('path'),
+                stim_in_exp1: jsPsych.timelineVariable('stim_in_exp1')
+            },
+
+            on_finish: function (data) {
+
+                // calculate trial starts (time_elapsed does not include post_trial_gap)
+                data.trial_start = data.time_elapsed - data.trial_duration;
+
+
+            }
+        }
+        return trialStructure;
+    }
+
+
+    // BEGINNING AND END OF EVERY RUN
+    var welcome = {
+        type: 'instructions',
+        pages: [
+            'Note to Shari: Click into Firefox',
+            'VOE Exp 2, ' + subj_ID + ', run ' + run_number,
+            'Please hold your head still ' +
+            'and pay attention to the videos.' +
+            '<p>Respond with "YES" (index) or "NO" (middle) to the question:</p>' +
+            '<p>"Was this (image) in the previous pair of movies?"</p>' +
+            '<p>Ready to begin?</p>'
+        ],
+        key_forward: 'Enter',
+        on_finish: function (data) {
+            data.trial_start = data.time_elapsed - data.trial_duration;
+            jsPsych.data.addProperties({
+                experimentName: exptName,
+                sessionDate: new Date().toLocaleDateString(),
+                sessionTime: new Date().toLocaleTimeString(),
+                participant: subj_ID,
+                run_number: run_number
+            });
+        }
+    };
+
+    var all_done = {
+        type: 'instructions',
+        pages: ['End of: VOESocPhys, ' + subj_ID + 'run ' + run_number +
+            ' of 4.'
+        ],
+        key_forward: 'Enter',
+        data: {
+            trialtype: 'all_done'
+        },
+        on_finish: function (data) {
+            var trials = jsPsych.data.get().filter({
+                trialtype: 'check'
+            });
+            var correct_trials = trials.filter({
+                subject_correct: true
+            });
+            jsPsych.data.addProperties({
+                run_accuracy: Math.round(correct_trials.count() / trials.count() * 100)
+            });
+            jsPsych.data.get().localSave('csv', exptName + '_' + subj_ID + "_run" + run_number +
+                +'.csv');
+        }
+    }
+
+    // SCANNER TRIGGER
+    var scannerTrigger = {
+        type: 'html-keyboard-response',
+        stimulus: 'Videos will begin shortly!',
+        choices: ['+', 'Add', '5'], // scanner sends a + as keyboard input, which triggers a run to begin
+        data: {
+            trialtype: 'blockstart'
+        },
+        on_finish: function (data) {
+            data.trial_start = data.time_elapsed - data.trial_duration;
+            data.blockstart_time = data.time_elapsed;
+        }
+    };
+
+    /* define debrief */
+    var end_of_run = {
+        type: 'html-keyboard-response',
+        stimulus: function () {
+            var attn_trials = jsPsych.data.get().filter({
+                trialtype: 'check'
+            });
+
+            var correct_trials = attn_trials.filter({
+                subject_correct: true
+            });
+
+            var missed_trials = attn_trials.filter({
+                subject_correct: null
+            });;
+
+            var accuracy = Math.round(correct_trials.count() / attn_trials.count() * 100);
+            var n_missed_trials = Math.round(missed_trials.count());
+            return `<p>Thanks! In this run, your accuracy was ${accuracy}%,</p>
+            <p>and you did not respond on ${n_missed_trials} trial(s).</p>`
+        }
+    };
+
+    var timeline = [];
+    timeline.push({
+        type: 'fullscreen',
+        fullscreen_mode: true
+    });
+
+    timeline.push(welcome);
+    timeline.push(scannerTrigger);
+    timeline.push(tensecrest);
+    timeline.push(makeTrials());
+    timeline.push(tensecrest);
+    timeline.push(end_of_run);
+
+
+    jsPsych.init({
+        timeline: timeline,
+        use_webaudio: false,
+        override_safe_mode: true,
+        on_finish: function (data) {
+            jsPsych.data.displayData();
+            jsPsych.data.get().localSave('csv', exptName + '_' + subj_ID + "_run" + run_number +
+                '_copy2.csv');
+        }
+    })
+</script>
+
+</html>

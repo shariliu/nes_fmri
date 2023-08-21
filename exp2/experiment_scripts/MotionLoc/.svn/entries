@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wc-entries
+   xmlns="svn:">
+<entry
+   committed-rev="32"
+   name=""
+   committed-date="2007-04-10T02:42:54.649838Z"
+   url="svn+ssh://miles.shadlen.org/home/maria/svn/dots/trunk/myOSXDots"
+   last-author="maria"
+   kind="dir"
+   uuid="899c7cd9-8e1b-0410-8726-e65d56bfbc57"
+   revision="35"/>
+<entry
+   committed-rev="24"
+   name="createDotInfo.m"
+   text-time="2006-11-02T08:33:18.000000Z"
+   committed-date="2006-11-02T08:57:39.497743Z"
+   checksum="6d4c53c5e351b2e3862f19469a727d73"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-11-02T08:11:23.000000Z"/>
+<entry
+   committed-rev="36"
+   name="drawDotsTest.m"
+   text-time="2007-04-13T00:47:03.000000Z"
+   committed-date="2007-04-13T00:52:02.426288Z"
+   checksum="6c6fbccf034a1e38ee4d026c0181defb"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-08-22T07:06:36.000000Z"
+   revision="36"/>
+<entry
+   committed-rev="36"
+   name="createMinDotInfo.m"
+   text-time="2007-04-13T00:27:58.000000Z"
+   committed-date="2007-04-13T00:52:02.426288Z"
+   checksum="652acaff26dca9ad48c21795a7efdf03"
+   last-author="maria"
+   kind="file"
+   revision="36"/>
+<entry
+   committed-rev="24"
+   name="dotgui.m"
+   text-time="2006-11-02T08:40:44.000000Z"
+   committed-date="2006-11-02T08:57:39.497743Z"
+   checksum="55ade3d6819d55254d7f09393e3e6484"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-11-02T08:11:23.000000Z"/>
+<entry
+   committed-rev="36"
+   name="contents.m"
+   text-time="2007-04-13T00:07:27.000000Z"
+   committed-date="2007-04-13T00:52:02.426288Z"
+   checksum="d5d122cf98e299f05cdbb05955fb1024"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-08-22T07:06:36.000000Z"
+   revision="36"/>
+<entry
+   committed-rev="30"
+   name="README.m"
+   text-time="2007-03-13T00:06:39.000000Z"
+   committed-date="2007-03-31T07:13:59.442392Z"
+   checksum="0cb8b771c7c0d9f8be0346eca163ece3"
+   last-author="maria"
+   kind="file"/>
+<entry
+   committed-rev="24"
+   name="DemoOSX1.m"
+   text-time="2006-11-02T07:47:16.000000Z"
+   committed-date="2006-11-02T08:57:39.497743Z"
+   checksum="1199fe9e185cd568bca74a8760216ea9"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-08-22T07:06:36.000000Z"/>
+<entry
+   committed-rev="36"
+   name="dotsX.m"
+   text-time="2007-04-13T00:42:14.000000Z"
+   committed-date="2007-04-13T00:52:02.426288Z"
+   checksum="f2a7286c1fa5f6a31473a5b9d4474afe"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-09-12T22:27:02.000000Z"
+   revision="36"/>
+<entry
+   committed-rev="26"
+   name="openExperiment.m"
+   text-time="2006-11-02T09:13:29.000000Z"
+   committed-date="2006-11-02T10:01:13.488132Z"
+   checksum="1be177034ddda166836f6674c1fee1c0"
+   last-author="maria"
+   kind="file"/>
+<entry
+   committed-rev="1"
+   name="setNumTargets.m"
+   text-time="2006-08-22T07:06:36.000000Z"
+   committed-date="2006-08-22T05:49:08.393770Z"
+   checksum="b4ae6cc75b38faea269ec9b8353bd672"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-08-22T07:06:35.000000Z"/>
+<entry
+   committed-rev="1"
+   name="createTRect.m"
+   text-time="2006-08-22T07:06:36.000000Z"
+   committed-date="2006-08-22T05:49:08.393770Z"
+   checksum="ad9db7c7c43d6918dd9dfae15c723d2a"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-08-22T07:06:35.000000Z"/>
+<entry
+   committed-rev="24"
+   name="closeExperiment.m"
+   text-time="2006-11-02T08:48:40.000000Z"
+   committed-date="2006-11-02T08:57:39.497743Z"
+   checksum="bdc41d4ac43b9bb1acce8ff0d36642f2"
+   last-author="maria"
+   kind="file"/>
+<entry
+   committed-rev="24"
+   name="dotsXnomask.m"
+   text-time="2006-11-02T07:19:44.000000Z"
+   committed-date="2006-11-02T08:57:39.497743Z"
+   checksum="cec32bb5052d4adc8295d1028fce7be0"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-08-22T07:06:36.000000Z"/>
+<entry
+   committed-rev="1"
+   name="showTargets.m"
+   text-time="2006-08-22T07:06:37.000000Z"
+   committed-date="2006-08-22T05:49:08.393770Z"
+   checksum="4cc8f61791e843ddb0bc9c2f8468fe29"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-08-22T07:06:36.000000Z"/>
+<entry
+   committed-rev="24"
+   name="createSound.m"
+   text-time="2006-11-02T08:49:30.000000Z"
+   committed-date="2006-11-02T08:57:39.497743Z"
+   checksum="841d8cfc3b76c599dbd25410b45b3b0c"
+   last-author="maria"
+   kind="file"/>
+<entry
+   committed-rev="11"
+   name="DemoOSX.m"
+   text-time="2006-08-30T00:56:38.000000Z"
+   committed-date="2006-09-07T20:42:05.785348Z"
+   checksum="f0ecac67630213204bc116a2c9a77d80"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-08-22T07:06:36.000000Z"/>
+<entry
+   committed-rev="25"
+   name="makeDotTargets.m"
+   text-time="2006-11-02T08:58:34.000000Z"
+   committed-date="2006-11-02T09:00:06.170931Z"
+   checksum="3f7c79b68e601f62678dc95ecfaf89a6"
+   last-author="maria"
+   kind="file"/>
+<entry
+   committed-rev="30"
+   name="dotsOnlyDemo.m"
+   text-time="2007-03-24T00:00:49.000000Z"
+   committed-date="2007-03-31T07:13:59.442392Z"
+   checksum="d41e8db87520394429b85d3ed0334f9c"
+   last-author="maria"
+   kind="file"/>
+<entry
+   committed-rev="28"
+   name="keyDots.m"
+   text-time="2007-02-06T19:28:23.000000Z"
+   committed-date="2007-02-06T19:33:35.657155Z"
+   checksum="49f790d2b9d6a9960f370c762399591d"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-11-02T08:11:24.000000Z"/>
+<entry
+   committed-rev="24"
+   name="makeInterval.m"
+   text-time="2006-11-02T08:49:13.000000Z"
+   committed-date="2006-11-02T08:57:39.497743Z"
+   checksum="ac9f698d1cd288fa58b67e36c25d615f"
+   last-author="maria"
+   kind="file"/>
+<entry
+   committed-rev="24"
+   name="newTargets.m"
+   text-time="2006-11-02T06:49:41.000000Z"
+   committed-date="2006-11-02T08:57:39.497743Z"
+   checksum="eb59e9bf5202235fdbdaa0e1233ca60f"
+   last-author="maria"
+   kind="file"
+   prop-time="2006-08-22T07:06:36.000000Z"/>
+<entry
+   committed-rev="24"
+   name="randomDotTrial.m"
+   text-time="2006-11-02T08:54:52.000000Z"
+   committed-date="2006-11-02T08:57:39.497743Z"
+   checksum="5ad53bb66179618f6f63915a9770aedd"
+   last-author="maria"
+   kind="file"/>
+</wc-entries>
