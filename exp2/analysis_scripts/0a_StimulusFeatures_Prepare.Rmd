@@ -1,0 +1,365 @@
+---
+title: "Violations of physical and psychological expectations in the human adult brain - Compute and visualize visual features across both experiments"
+author: "Shari Liu"
+date: '2023-08-02'
+output:
+  html_document:
+    code_folding: show
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    number_sections: yes
+    theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(pacman)
+pacman::p_load(tidyverse,
+               conflicted,
+               cowplot,
+               patchwork,
+               cluster,
+               corrplot,
+               pheatmap,
+               here,
+               vroom,
+               R.matlab,
+               readr)
+
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("rename", "dplyr")
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("lmer", "lmerTest")
+conflict_prefer("here", "here")
+
+source(here("helper_funs.R"))
+
+sessionInfo()
+
+```
+
+## Overview
+This script organizes video-level stimulus features across the 96 videos from Experiment 2. The features are: low and high spatial frequency, rectilinearity, curvilinearity, contrast, luminance, and motion. The scripts for calcualting the features themselves can be found at the path `vis_statistics`. Here we compile these data, visualize them, and prepare RDMs / pairwise distances across the main conditions of the experiment, which are: solidity-exp, solidity-unexp, permanence-exp, permanence-unexp (all from the physical domain), goal-exp, goal-unexp, and efficiency-exp, efficiency-unexp (all from psychological domain). We also have, as exploratory trials, videos that cross domains: agentsolidity-exp, agentsolidity-unexp, inferconstraint-exp, and inferconstraint-unexp.
+
+```{r}
+# spf.files <- list.files(
+#   here("vis_statistics/spatial_freq/output"),
+#   pattern = ".mat$",
+#   recursive = TRUE,
+#   full.names = TRUE
+# )
+# 
+# sf <- data.frame()
+# 
+# for (file in spf.files) {
+#   curmat <- readMat(file)
+#   curhsf <- mean(as.vector(curmat$vids.high), na.rm = TRUE)
+#   curlsf <- mean(as.vector(curmat$vids.low), na.rm = TRUE)
+#   video_string <- str_split(file, "/")[[1]][14]
+#   videoname.pre <- str_remove(video_string, "sfInfo_")
+#   videoname <- str_remove(videoname.pre, ".mat")
+#   cur.row <- data.frame(video = videoname,
+#                         hsf = curhsf,
+#                         lsf = curlsf)
+#   sf <- rbind(sf, cur.row)
+# }
+# 
+# View(sf)
+# 
+# write.csv(sf, "vis_statistics/spatial_freq/output/SF_ALLVIDEOS.csv")
+```
+
+```{r}
+# curv.files <- list.files(
+#   here("vis_statistics/spatial_freq/output"),
+#   pattern = ".mat$",
+#   recursive = TRUE,
+#   full.names = TRUE
+# )
+# 
+# sf <- data.frame()
+# 
+# for (file in spf.files) {
+#   curmat <- readMat(file)
+#   curhsf <- mean(as.vector(curmat$vids.high), na.rm = TRUE)
+#   curlsf <- mean(as.vector(curmat$vids.low), na.rm = TRUE)
+#   video_string <- str_split(file, "/")[[1]][14]
+#   videoname.pre <- str_remove(video_string, "sfInfo_")
+#   videoname <- str_remove(videoname.pre, ".mat")
+#   cur.row <- data.frame(video = videoname,
+#                         hsf = curhsf,
+#                         lsf = curlsf)
+#   sf <- rbind(sf, cur.row)
+# }
+# 
+# View(sf)
+# 
+# write.csv(sf, "vis_statistics/spatial_freq/output/SF_ALLVIDEOS.csv")
+```
+
+# (1) Read in features
+
+
+```{r}
+# read in data, and z score
+
+contrast <-
+  read.csv(here(
+    "vis_statistics/luminance_contrast/outputs/CONTRAST_ALL_VIDEOS.csv"
+  )) %>%
+  mutate(metric = "iqr_contrast") %>%
+  rename(value = iqr_contrast) %>%
+  mutate(normalized_value = scale(value))
+
+luminance <-
+  read.csv(here(
+    "vis_statistics/luminance_contrast/outputs/LUMINANCE_ALL_VIDEOS.csv"
+  )) %>%
+  mutate(metric = "mean_luminance") %>%
+  rename(value = mean_luminance) %>%
+  mutate(normalized_value = scale(value))
+
+motion <-
+  read.csv(here("vis_statistics/motion/MOTION_INFO_ALL-VIDEOS.csv")) %>%
+  separate(
+    col = video,
+    sep = "_",
+    into = c("domain", "scenario_group", "scenario_specific", "event"),
+    remove = FALSE
+  ) %>%
+  mutate(metric = "mean_motion") %>%
+  rename(value = mean_ME) %>%
+  mutate(normalized_value = scale(value))
+
+
+sp_freq.wide <-
+  read.csv(here("vis_statistics/spatial_freq/output/SF_ALLVIDEOS.csv")) %>%
+  separate(
+    col = video,
+    sep = "_",
+    into = c("domain", "scenario_group", "scenario_specific", "event"),
+    remove = FALSE
+  ) 
+
+sp_freq <- sp_freq.wide %>%
+  gather("metric", "value", hsf:lsf) %>%
+  group_by(metric) %>%
+  mutate(normalized_value = scale(value)) %>%
+  ungroup() %>%
+  select(-X)
+
+sp_freq$metric <- as.factor(sp_freq$metric)
+levels(sp_freq$metric) <- c("mean_hsf", "mean_lsf")
+
+curv_rect.wide <-
+  read.csv(here("vis_statistics/curvrect_video_means.csv")) %>%
+  separate(
+    col = video,
+    sep = "_",
+    into = c("domain", "scenario_group", "scenario_specific", "event"),
+    remove = FALSE
+  ) %>%
+  relocate(c("rect_means", "curv_means"), .after = last_col())
+
+curv_rect <- curv_rect.wide %>%
+  gather("metric", "value", rect_means:curv_means) %>%
+  group_by(metric) %>%
+  mutate(normalized_value = scale(value)) %>%
+  ungroup()
+
+curv_rect$metric <- as.factor(curv_rect$metric)
+levels(curv_rect$metric) <- c("mean_curv", "mean_rect")
+
+```
+
+```{r}
+# now that all the dfs have the same col names, bind them together, filter videos based on what actually appeared in either experiment 1 or 2
+metrics.prelim <-
+  rbind(contrast, luminance, motion, sp_freq, curv_rect) %>%
+  mutate(in_exp1 = case_when(str_detect(video, "exp1") ~ TRUE,
+                             TRUE ~ FALSE)) %>%
+  mutate(in_exp2 = case_when(str_detect(video, "support") ~ FALSE,
+                             TRUE ~ TRUE)) %>%
+  filter(str_detect(video, "infer-constraint-3.1_trial2", negate = TRUE)) %>%
+  filter(str_detect(video, "infer-constraint-3.1_trial19", negate = TRUE)) %>%
+  filter(str_detect(video, "agent-solidity-2.5_trial15", negate = TRUE)) %>%
+  filter(str_detect(video, "agent-solidity-2.5_trial6", negate = TRUE)) 
+```
+
+```{r}
+# deal with events with identical test events appropriately.
+
+# first take the trials that have distinct test trials
+metrics.minus.identicals <- metrics.prelim %>%
+  filter(event != "test") %>%
+  filter(!str_detect(event, "fam-")) %>%
+  mutate(event_orig = event) %>%
+  mutate(identical_test = FALSE)
+
+# take the test event, make it count towards unexpected event estimate
+identical.tests.unexp <- metrics.prelim %>% filter(event == "test") %>%
+  rename(event_orig = event) %>%
+  mutate(event = "unexp") %>%
+  mutate(identical_test = TRUE)
+
+# take the test event, make it count towards expected event estimate
+identical.tests.exp <- metrics.prelim %>% filter(event == "test") %>%
+  rename(event_orig = event) %>%
+  mutate(event = "exp") %>%
+  mutate(identical_test = TRUE)
+
+# take the fam-exp and fam-unexp events, and just change them to the type "fam"
+identical.tests.fam <- metrics.prelim %>% filter(str_detect(event, "fam-")) %>%
+  rename(event_orig = event) %>%
+  mutate(event = "fam") %>%
+  mutate(identical_test = TRUE)
+
+# now bind all the rows together..
+metrics.full <-
+  rbind(
+    metrics.minus.identicals,
+    identical.tests.fam,
+    identical.tests.unexp,
+    identical.tests.exp
+  ) %>%  
+  
+  # make task names
+  mutate(
+    task = case_when(
+      str_detect(scenario_group, "infer-constraint") ~ "infer-constraint",
+      str_detect(scenario_group, "agent-solidity") ~ "agent-solidity",
+      str_detect(scenario_group, "solidity") ~ "solidity",
+      str_detect(scenario_group, "permanence") ~ "permanence",
+      str_detect(scenario_group, "support") ~ "support",
+      str_detect(scenario_group, "efficiency") ~ "efficiency",
+      str_detect(scenario_group, "goal") ~ "goal"
+    )
+  )  %>%
+  
+  # change psych-physics label to "both" to match ROI results
+  mutate(domain = case_when(domain == "physics-psychology" ~ "both",
+                            TRUE ~ domain)) %>%
+  
+  unite("video_group", c("domain", "task", "scenario_group", "scenario_specific"), remove = FALSE) 
+
+
+unique(sort(metrics.full$video_group))
+str(metrics.full)
+# write_rds(metrics.full, here("outputs/visual_statistics/vis_features_pervideo.Rds"))
+```
+
+```{r}
+metrics.full.unnormalized <- metrics.full %>%
+  select(-contains("normalized_value")) %>%
+  pivot_wider(names_from = metric, 
+              values_from = value)
+
+metrics.full.normalized <- metrics.full %>%
+  select(-value) %>%
+  pivot_wider(names_from = metric, 
+              values_from = normalized_value,
+              names_prefix = "normalized_")
+
+visual_statistics_full <-
+  full_join(metrics.full.unnormalized, metrics.full.normalized) %>%
+  separate(
+    col = video,
+    sep = "_",
+    into = c("video_domain", "video_scenario_group", "video_scenario_specific", "video_event"),
+    remove = TRUE
+  ) %>%
+  mutate(video_domain = case_when(video_domain == "physics-psychology" ~ "both",
+                                  TRUE ~ video_domain)) %>%
+  unite("vis_statistics_video_group", c("video_domain", "video_scenario_group", "video_scenario_specific"), remove = TRUE)
+
+# write.csv(visual_statistics_full, here("outputs/visual_statistics/visual_statistics_full_new.csv"))
+```
+
+### Tidy up z scores per experiment
+```{r, eval = FALSE}
+all_videos <- read.csv(here("outputs/visual_statistics/visual_statistics_full_new.csv")) %>%
+  select(-contains("normalized"))
+
+str(all_videos)
+
+visual_statistics_exp1 <- all_videos %>%
+  filter(in_exp1 == TRUE) %>%
+  gather("metric", "value", iqr_contrast:mean_curv) %>%
+  group_by(metric) %>%
+  mutate(normalized_value = scale(value)) %>%
+  ungroup()
+
+# write.csv(visual_statistics_exp1, here("outputs/visual_statistics/visual_statistics_exp1_new.csv"))
+
+visual_statistics_exp2 <- all_videos %>%
+  filter(in_exp2 == TRUE) %>%
+  gather("metric", "value", iqr_contrast:mean_curv) %>%
+  group_by(metric) %>%
+  mutate(normalized_value = scale(value)) %>%
+  ungroup()
+
+# write.csv(visual_statistics_exp2, here("outputs/visual_statistics/visual_statistics_exp2_new.csv"))
+
+```
+
+
+# (2) Visualize per video
+
+```{r}
+metrics.full <- readRDS(here("outputs/visual_statistics/vis_features_pervideo.Rds"))
+
+# remove fam events, and support events (only in exp 1)
+metrics <- metrics.full %>%
+  filter(task != "support",
+         event != "fam")
+
+metrics_by_event <- ggplot(data = metrics %>% filter(domain != "both"),
+                       aes(
+                         x = event,
+                         y = normalized_value,
+                         # label = video,
+                         fill = event
+                       )) +
+  geom_boxplot(position = position_dodge(width = 0.8)) +
+  geom_point(position = position_dodge(width = 0.8)) +
+  ylab("Normalized measure per video") +
+  facet_wrap(~metric + domain, nrow = 1) +
+  theme_cowplot(12) +
+  theme(axis.text.x = element_text(
+    angle = 90,
+    vjust = 0.5,
+    hjust = 1
+  ))
+
+```
+
+
+
+```{r}
+metrics_by_domain <- ggplot(data = metrics,
+                       aes(
+                         x = domain,
+                         y = normalized_value,
+                         # label = video,
+                         fill = domain
+                       )) +
+  geom_boxplot(position = position_dodge(width = 0.8)) +
+  geom_point(position = position_dodge(width = 0.8)) +
+  ylab("Normalized measure per video") +
+  facet_wrap(~metric, nrow = 1) +
+  theme_cowplot(12) +
+  theme(axis.text.x = element_text(
+    angle = 90,
+    vjust = 0.5,
+    hjust = 1
+  ))
+```
+
+Eexpected and unexpected movies are about equal, on average, with respect to all of these features. However, these features vary by domain.
+
+```{r fig.height = 14}
+metrics_by_event / metrics_by_domain + plot_annotation(tag_levels = 'A')
+```
+

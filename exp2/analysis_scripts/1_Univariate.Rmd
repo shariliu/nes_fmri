@@ -1,0 +1,2685 @@
+---
+title: "Violations of physical and psychological expectations in the human adult brain - Experiment 2 Univariate analysis"
+author: "Shari Liu"
+date: '2023-08-02'
+output:
+  html_document:
+    code_folding: show
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    number_sections: yes
+    theme: spacelab
+---
+
+
+# Overview
+
+This script visualizes and analyzes the mean amplitude of response (`meanbeta`) to expected and unexpected events from three "domains" - psychology-action, psychology-environment, and physics. Our pre-registered confirmatory analyses center around the psychology-action and physics videos.
+
+-   Part 1a: Domain and event effects 8 focal regions. This is the univariate confirmatory analysis for the project.
+-   Part 1b: Checking robustness of results depending on ROI size (pre-registered as 100 voxels)
+-   Part 2: Repeating the univariate analysis in a larger set of domain-general and domain-specific regions, with more conservative significance thresholds given the # of regions we're exploring per category.
+-   Part 3: Exploratory univariate analysis on VOE effect in action-environment scenarios.  
+-   Part 4: Similar to confirmatory analysis, except that we use the VOE events from runs 3-4 to select ROIs. Function of this analysis is to check for whether the confusing STS results we obtained is due to conceptual mismatch between the DOTS localizer and the psych-action events.
+-   Part 5: We model betas for each scenario and event, rather than folding across scenarios / tasks. This allows us to test for effects of visual statistics (Part 5a), which were computed over each video individually. Also allows us to do per-task analyses (Part 5b). 
+-   Part 6: Compute and plot Dice coefficient between two focal regions (bilateral APC and L/RSMG).
+-   Part 7: Region by region univariate effect size (analogue to confirmatory MVPA analysis that is rendered uninterpretable, given the lack of reliable VOE spatial patterns across runs)
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 1, digits = 3)
+library(pacman)
+pacman::p_load(tidyverse,
+               patchwork,
+               papaja,
+               ggforce,
+               conflicted,
+               here,
+               cowplot,
+               lme4,
+               lmerTest,
+               effects,
+               effectsize,
+               EMAtools,
+               performance,
+               parameters,
+               BayesFactor,
+               gt,
+               insight,
+               sjPlot,
+               lsmeans,
+               ggrepel,
+               GGally,
+               nptest,
+               boot,
+               boot.pval,
+               car)
+
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("rename", "dplyr")
+conflict_prefer("mutate", "dplyr")
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("lmer", "lmerTest")
+conflict_prefer("here", "here")
+
+source(here("helper_funs.R"))
+
+options(contrasts = c("contr.sum", "contr.poly")) 
+
+theme_set(theme_cowplot(10))
+
+sessionInfo()
+```
+
+
+```{r}
+regioninfo <- read.csv(here("input_data/manyregions_info.csv")) 
+DT::datatable(regioninfo %>% dplyr::arrange(ROI_category, focal_region), options = list(scrollX = TRUE))
+
+domain_specific_regions <- c("physics", "psychology")
+domain_general_regions <- c("early_visual", "MD")
+
+```
+
+```{r}
+univariate_data <-
+  read_rds(here("outputs/univariate_data/study2_univariate_data_allregions_alltopN.Rds"))
+
+univariate_data$event <- relevel(univariate_data$event, ref = "unexp") # for some reason this is required for the model coefficients to reflect the intuitive def that unexpected > expected is a positive coefficient
+
+univariate_summary_domain <-
+  readRDS(here("outputs", "descriptive_summaries", "study2_univariate_summary_domain.Rds"))
+
+univariate_summary_domain_runs12 <-
+  readRDS(here("outputs", "descriptive_summaries", "study2_univariate_summary_domain_runs12.Rds"))
+
+univariate_summary_domain_allruns <-
+  readRDS(here("outputs", "descriptive_summaries", "study2_univariate_summary_domain_allruns.Rds"))
+```
+
+# PART 1a: Focal regions - confirmatory analysis
+
+```{r}
+focal_data <- univariate_data %>%
+  filter(focal_region == 1)
+
+focal_summary_domain <- univariate_summary_domain %>%
+  filter(focal_region == 1)
+
+focal_summary_domain_runs12 <- univariate_summary_domain_runs12 %>%
+    filter(focal_region == 1)
+
+# focal_summary_task_runs12 <- univariate_summary_task_runs12 %>%
+    # filter(focal_region == 1)
+
+regions <- levels(as.factor(focal_data$ROI_name_final))
+
+```
+
+## Plots
+
+First, here are plots of betas, run by run, to physics and psychology events (familiarization, expected, unexpected).
+
+```{r echo=FALSE}
+plot_univar_runbyrun <- function(region, ymin, ymax) {
+  plotobject <-
+    ggplot(
+      data = focal_summary_domain %>% filter(
+        str_detect(ROI_name_final, region),
+        str_length(extracted_run_number) == 4,
+        top_n_voxels == 100
+      ),
+      aes(x = event, y = meanbeta, fill = domain)
+    ) +
+    geom_bar(stat = "identity", aes(alpha = event), colour = "black") +
+    geom_errorbar(
+      aes(ymin = meanbeta - se, ymax = meanbeta + se),
+      position = position_dodge(width = .9),
+      width = .2,
+      colour = "black"
+    ) +
+    geom_point(data = focal_data %>% filter(str_detect(ROI_name_final, region), str_length(extracted_run_number) == 4, top_n_voxels == 100
+                                            # domain != "both"
+),
+               alpha = .1) +
+    geom_line(data = focal_data %>% filter(str_detect(ROI_name_final, region), str_length(extracted_run_number) == 4, top_n_voxels == 100
+                                           # domain != "both"
+),
+              aes(group =
+                    subjectID),
+              alpha = .1) +
+    theme_cowplot(10) +
+    # facet_wrap(~ ROI_name_final + domain, nrow = 1) +
+    facet_wrap( ~ ROI_name_final + domain + extracted_run_number, nrow = 1) +
+    scale_fill_manual(values = c("#ca3ad7","#00AFBB", "#FC4E07")) + # ,
+    ylab("Average beta") +
+    xlab("Event") +
+    theme(axis.text.x = element_text(
+      angle = 90,
+      vjust = 0.5,
+      hjust = 1
+    )) +
+    coord_cartesian(ylim = c(ymin, ymax)) +
+    ggtitle(paste0("ROI:", region)) 
+  
+  plotobject
+}
+```
+
+
+```{r plot.height = 10}
+plot_univar_runbyrun("superiortemporal_L", -1, 4) | plot_univar_runbyrun("superiortemporal_R", -1, 4)
+
+plot_univar_runbyrun("supramarginal_L", -1, 4) | plot_univar_runbyrun("supramarginal_R", -1, 4)
+
+plot_univar_runbyrun("antParietal_bilateral", -1, 6) | plot_univar_runbyrun("precentral_inferiorfrontal_R", -1, 6)
+
+plot_univar_runbyrun("V1_bilateral", -1, 11) | plot_univar_runbyrun("MT_bilateral", -1, 11)
+```
+
+
+### By domain (input from domain / event-level betas)
+```{r echo=FALSE}
+plot_univar_runs12 <- function(query, ymin, ymax) {
+  plotobject <-
+    ggplot(
+      data = focal_summary_domain_runs12 %>% filter(
+        str_detect(ROI_name_final, query),
+        domain != "both",
+        focal_region == 1,
+        event != "fam",
+        top_n_voxels == "100"
+      ),
+      aes(x = event, y = meanbeta, fill = domain)
+    ) +
+    geom_bar(stat = "identity", aes(alpha = event), colour = "black") +
+  geom_errorbar(
+      aes(ymin = meanbeta - se, ymax = meanbeta + se),
+      position = position_dodge(width = .9),
+      width = .3,
+      colour = "black"
+    ) +
+
+    theme_cowplot(10) +
+    facet_wrap( ~ ROI_name_final + domain, nrow = 1) +
+    scale_fill_manual(values = c("#00AFBB", "#FC4E07")) + # ,"#ca3ad7",
+
+    ylab("Average beta") +
+    xlab("Event") +
+    theme(axis.text.x = element_text(
+      angle = 90,
+      vjust = 0.5,
+      hjust = 1
+    )) +
+    theme(legend.position = "none") +
+    coord_cartesian(ylim = c(ymin, ymax)) +
+    ggtitle(paste0("ROI:", query)) 
+  
+  plotobject
+}
+```
+
+These plots go into Figure 3 of the main text.
+
+```{r fig.width=10}
+# DS_runs12_plots <- plot_univar_runs12("superiortemporal", 0, 4) |
+# plot_univar_runs12("supramarginal", 0, 4) 
+# 
+# DG_runs12_plots <- plot_univar_runs12("MD", 0, 6) | plot_univar_runs12("early_visual", 0, 11)
+# 
+# DS_runs12_plots / DG_runs12_plots
+
+(plot_univar_runs12("superiortemporal_L", 0, 4) | plot_univar_runs12("superiortemporal_R", 0, 4) )
+
+(plot_univar_runs12("supramarginal_L", 0, 4) | plot_univar_runs12("supramarginal_R", 0, 4))
+
+(plot_univar_runs12("antParietal_bilateral", 0, 6) | plot_univar_runs12("precentral_inferiorfrontal_R", 0, 6))
+
+plot_univar_runs12("V1_bilateral", 0, 11) | plot_univar_runs12("MT_bilateral", 0, 11)
+```
+
+### Action-env (input from domain / event-level betas)
+
+```{r}
+summary_domain_allruns <- read_rds(here("outputs/descriptive_summaries/study2_univariate_summary_domain_allruns.Rds"))
+```
+
+```{r echo=FALSE}
+plot_both_allruns <- function(query, ymin, ymax) {
+  plotobject <-
+    ggplot(
+      data = summary_domain_allruns %>% filter(
+        focal_region == 1,
+        str_detect(ROI_name_final, query),
+        domain == "both",
+        event != "fam",
+        top_n_voxels == "100"
+      ),
+      aes(x = event, y = meanbeta, fill = domain)
+    ) +
+    geom_bar(stat = "identity", aes(alpha = event), colour = "black") +
+  geom_errorbar(
+      aes(ymin = meanbeta - se, ymax = meanbeta + se),
+      position = position_dodge(width = .9),
+      width = .3,
+      colour = "black"
+    ) +
+    theme_cowplot(10) +
+    facet_wrap(~ factor(
+      ROI_name_final,
+      levels = c(
+        "supramarginal_L",
+        "supramarginal_R",
+        "superiortemporal_L",
+        "superiortemporal_R",
+        "antParietal_bilateral",
+        "precentral_inferiorfrontal_R",
+        "V1_bilateral",
+        "MT_bilateral"
+      )
+    ), nrow = 1) +
+    # scale_fill_manual(values = c("#00AFBB", "#FC4E07")) + # ,"#ca3ad7",
+    scale_fill_manual(values = c("#7929f4")) +
+    ylab("Average beta") +
+    xlab("Event") +
+    theme(axis.text.x = element_text(
+      angle = 90,
+      vjust = 0.5,
+      hjust = 1
+    )) +
+    theme(legend.position = "none") +
+    coord_cartesian(ylim = c(ymin, ymax))
+  
+    # ggtitle(paste0("ROI:", region)) 
+  
+  plotobject
+}
+```
+
+Univariate response to psych_env events, over all runs, for all focal regions.
+
+```{r}
+
+STS <- plot_both_allruns("superiortemporal_", -1, 10) 
+SMG <- plot_both_allruns("supramarginal_", -1, 10)
+
+V1 <- plot_both_allruns("V1_bilateral", -1, 10) 
+MT <- plot_both_allruns("MT_bilateral", -1, 10)
+
+APC <- plot_both_allruns("antParietal_bilateral", -1, 10)
+RFC <- plot_both_allruns("precentral_inferiorfrontal_R", -1, 10)
+
+STS | SMG | V1 | MT | APC | RFC + plot_layout(widths = c(2, 2, 1, 1, 1, 1))
+
+```
+
+
+
+### By task (input from single betas)
+```{r}
+study2_univariate_summary_task_singlebetas <-  readRDS(here("outputs", "descriptive_summaries", "study2_univariate_summary_task_singlebetas.Rds")) %>%
+  filter(focal_region == "1")
+```
+
+
+```{r}
+regions <- levels(as.factor(study2_univariate_summary_task_singlebetas$ROI_name_final))
+
+plot_univar <- function(region, ymin, ymax) {
+  plotobject <- ggplot(data = study2_univariate_summary_task_singlebetas %>% 
+                         filter(str_detect(ROI_name_final, region)),
+           aes(x = event, y = meanbeta, fill = task)) +
+      geom_bar(stat = "identity", aes(alpha = event), colour = "black") +
+      geom_errorbar(
+        aes(ymin = meanbeta - se, ymax = meanbeta + se),
+        position = position_dodge(width = .9),
+        width = .2,
+        colour = "black"
+      ) +
+      theme_cowplot(10) +
+      facet_wrap( ~ ROI_name_final + factor(task, c("solidity", "permanence", "goal", "efficiency", "agent-solidity", "infer-constraint")) + extracted_run_number, nrow = 2) +
+      # scale_fill_manual(values = c("#deaf1f", "#f34b00", "#00aa8b", "#4f8e00")) +
+      ylab("Average beta (amplitude)") +
+      xlab("Event") +
+      theme(axis.text.x = element_text(
+        angle = 90,
+        vjust = 0.5,
+        hjust = 1
+    ),
+    legend.position = "none") +
+    coord_cartesian(ylim = c(ymin, ymax)) +
+    ggtitle(paste0("ROI:", region))
+  
+  plotobject
+}
+```
+
+```{r}
+plot_univar("superiortemporal_L", -2, 3)
+plot_univar("superiortemporal_R", -2, 4)
+plot_univar("supramarginal_L", -2, 4)
+plot_univar("supramarginal_R", -2, 4)
+plot_univar("V1_bilateral", -1, 11)
+plot_univar("MT_bilateral", -1, 7)
+plot_univar("antParietal_bilateral", -1, 7)
+plot_univar("precentral_inferiorfrontal_R", -1, 7)
+```
+
+
+## Check whether we should restrict to first 2 runs
+
+Following the preregistration plan, we check whether we are able to take the second level cope values (averaging across 4 runs) as the main dependent measure, or whether we need to restrict the analysis to just the first 2 runs.
+
+First we fit a model including an interaction between run number and event.
+
+```{r}
+focal_data_checking <- focal_data %>%
+  filter(event != "fam",
+         top_n_voxels == "100",
+         domain != "both",
+         str_length(extracted_run_number) == 4) %>%
+  filter(ROI_name_final != "V1_bilateral",
+         ROI_name_final != "MT_bilateral")
+
+focal_data_checking$fixation_position <- as.factor(focal_data_checking$fixation_position)
+
+focal_data_checking$event <- relevel(focal_data_checking$event, ref = "unexp")
+
+
+checkmodel <- lmer(
+  data = focal_data_checking,
+  formula = meanbeta ~ extracted_run_number * event + (1|subjectID) + (1|ROI_name_final)
+)
+
+checkmodel %>%
+ apa_print() %>%
+ apa_table()
+
+summary(checkmodel)
+lsmeans(checkmodel, pairwise ~ event | extracted_run_number)$contrasts
+model_habituation_results <- cbind(gen.m(checkmodel), gen.ci(checkmodel)[3:10,])
+
+model_habituation_results_byrun <- lsmeans(checkmodel, pairwise ~ event | extracted_run_number, pbkrtest.limit = 3048)$contrasts %>% as.data.frame()
+```
+
+We then compare this model to a simpler model without this interaction.
+
+```{r}
+checkmodel_simpler <- lmer(
+  data = focal_data_checking,
+  formula = meanbeta ~ event + extracted_run_number + (1|subjectID) + (1|ROI_name_final)
+)
+
+summary(checkmodel_simpler)
+# checkmodel_simpler %>%
+#   apa_print() %>%
+#   apa_table()
+
+anova(checkmodel, checkmodel_simpler)
+```
+
+```{r}
+knitr::kable(model_habituation_results)
+
+knitr::kable(model_habituation_results_byrun)
+```
+
+```{r}
+# write_rds(model_habituation_results, path = here("outputs/univariate_results/habituation_over_runs_modelsummary.Rds"))
+# write_rds(model_habituation_results_byrun, path = here("outputs/univariate_results/habituation_over_runs_perrun.Rds"))
+```
+
+
+This is a grey area. On the one hand we do not observe a significant run x event interaction. On the other hand, the primary VOE effect (unexp \> expected) is indeed variable across runs, and stronger in runs 1 and 2 than runs 3 and 4, when considering psychology and physics events). So on balance, we have the grounds for focusing the analysis on runs 1-2.
+
+Here we fit a model including main effects of domain and event (domain-general and domain-specific regions) and also their interaction (domain-specific regions only), and organize and print the outputs. 
+
+## Model Tables
+
+```{r, eval = FALSE}
+data_for_modeling <- univariate_data %>%
+  filter(event != "fam",
+         # top_n_voxels == "100",
+         !str_detect(extracted_run_number, "fold"),
+         !str_detect(extracted_run_number, "all_runs"),
+         domain != "both")
+
+ROIs <- levels(as.factor(data_for_modeling$ROI_name_final))
+runs <- c("run1", "run2", "run3", "run4", "all_runs", "runs12")
+top_n_voxels <- unique(data_for_modeling$top_n_voxels)
+# top_n_voxels <- 100
+
+effect_sizes_intercept_row <- data.frame(d = NA)
+BF_intercept_row <- data.frame(BF = NA, BF_interpretation = NA)
+
+rownames(effect_sizes_intercept_row) <- "(Intercept)"
+rownames(BF_intercept_row) <- "(Intercept)"
+rownames_no_intercept <- c("event1", "domain1", "event:domain")
+
+```
+
+```{r, eval = FALSE}
+modelsummaries_init <- data.frame()
+
+
+for (ROI in ROIs) {
+  curROI <- ROI
+  
+  for (topN in top_n_voxels) {
+    cur_top_voxels_N <- topN
+    
+    for (run in runs) {
+      curRun = run
+      
+      if (str_length(curRun) == 4) { # run1, run2, etc
+        ROIdata <- data_for_modeling %>%
+          filter(ROI_name_final == curROI,
+                 top_n_voxels == topN,
+                 extracted_run_number == curRun)
+        
+      } else if (curRun == "all_runs") {
+        ROIdata <- data_for_modeling %>%
+          filter(ROI_name_final == curROI,
+                 top_n_voxels == topN,
+                 str_length(extracted_run_number) == 4)
+        
+      } else if (curRun == "runs12") {
+        ROIdata <- data_for_modeling %>%
+          filter(ROI_name_final == curROI,
+                 top_n_voxels == topN) %>%
+          filter(extracted_run_number == "run1" | extracted_run_number == "run2")
+      }
+      
+      # print("Current ROI: ", curROI)
+      if (ROIdata$ROI_category[1] %in% domain_specific_regions) {
+        ROI_category <- "specific"
+      } else {
+        ROI_category <- "general"
+      }
+      
+      # had to remove run random int (convergence))
+      model <- lmer(data = ROIdata,
+                    formula = meanbeta ~ event * domain + (1|subjectID))
+      model_just_maineffects <-
+        update(model, formula = ~ . - event:domain)  # Without interaction term
+      model_just_domain <-
+        update(model_just_maineffects, formula = ~ . - event)
+      model_just_event <-
+        update(model_just_maineffects, formula = ~ . - domain)
+      
+      BF_BIC_interaction <-
+        data.frame(BF = exp((
+          BIC(model_just_maineffects) - BIC(model)
+        ) / 2),
+        BF_interpretation = interpret_bf(exp((
+          BIC(model_just_maineffects) - BIC(model)
+        ) / 2)))  # BICs to Bayes factor
+      
+      BF_BIC_event <-
+        data.frame(BF = exp((
+          BIC(model_just_domain) - BIC(model_just_maineffects)
+        ) / 2),
+        BF_interpretation = interpret_bf(exp((
+          BIC(model_just_domain) - BIC(model_just_maineffects)
+        ) / 2)))
+      
+      BF_BIC_domain <-
+        data.frame(BF = exp((
+          BIC(model_just_event) - BIC(model_just_maineffects)
+        ) / 2),
+        BF_interpretation = interpret_bf(exp((
+          BIC(model_just_event) - BIC(model_just_maineffects)
+        ) / 2)))
+      
+      BF_initial <- rbind(BF_BIC_event,
+                          BF_BIC_domain,
+                          BF_BIC_interaction)
+      
+      rownames(BF_initial) <- rownames_no_intercept
+      BFs <- rbind(BF_intercept_row,
+                   BF_initial)
+      
+      effect_sizes_initial <- lme.dscore(model, ROIdata, "lme4") %>%
+        select(d)
+      effect_sizes <-
+        rbind(effect_sizes_intercept_row, effect_sizes_initial)
+      
+      ROI_focal <- ROIdata$focal_region[1]
+
+      modelsummary <-
+        cbind(
+          cur_top_voxels_N,
+          curRun,
+          ROI_category,
+          ROI_focal,
+          curROI,
+          rownames(summary(model)$coefficients),
+          summary(model)$coefficients,
+          confint.merMod(model)[3:6, ],
+          effect_sizes,
+          BFs
+        ) %>%
+        as.data.frame()
+      
+      colnames(modelsummary) <-
+        c(
+          "top_n_voxels",
+          "extracted_run_number",
+          "domain",
+          "focal_region",
+          "ROI",
+          "effect",
+          "B",
+          "SE",
+          "df",
+          "t",
+          "p",
+          "CI_95_lower",
+          "CI_95_upper",
+          "d",
+          "BF",
+          "BF_interpretation"
+        )
+      
+      modelsummaries_init <-
+        rbind(modelsummaries_init, modelsummary)
+      cat(
+        tab_model(
+          model,
+          show.std = TRUE,
+          show.se = TRUE,
+          show.stat = TRUE,
+          auto.label = TRUE,
+          title = paste0("Confirmatory Univariate ROI results in: ", curROI, " ", curRun, " top voxels = ", cur_top_voxels_N)
+        )$knitr,
+        "  \n  \n"
+      )
+    }
+  }
+}
+
+```
+
+```{r, eval = FALSE}
+modelsummaries <- modelsummaries_init %>%
+  mutate_at(c(7:15), as.numeric) %>%
+  mutate(star = as.factor(
+           case_when(p < .001 ~ "***",
+                     p < .01 ~ "**",
+                     p < .05 ~ "*",
+                     p < .1 ~ "~",
+                     TRUE ~ " ")
+         )) %>%
+  mutate(p = round(p, digits = 3))
+
+modelsummaries$effect <-
+  as.factor(modelsummaries$effect)
+
+levels(modelsummaries$effect) <-
+  c("intercept", "domain", "event", "event:domain")
+rownames(modelsummaries) <- NULL
+
+# write_rds(modelsummaries, here("outputs/univariate_results/univar_results_alltopN_allregions.Rds"))
+```
+
+```{r}
+modelsummaries <- read_rds(here("outputs/univariate_results/univar_results_alltopN_allregions.Rds"))
+```
+
+```{r}
+DT::datatable(modelsummaries %>% filter(focal_region == 1, top_n_voxels == 100, extracted_run_number == "runs12") %>% arrange(effect), options = list(scrollX = TRUE))
+```
+
+Below we check, for each domain-specific region (left and right STS and SMG), whether a model including an interaction between domain and event fits better than a model without the interaction.
+
+
+```{r}
+focal_data_100_runs12 <- focal_data %>% 
+        filter(top_n_voxels == "100",
+               domain != "both", 
+               event != "fam") %>%
+        filter(extracted_run_number == "run1" | extracted_run_number == "run2")
+```
+
+```{r, fig.height=10}
+LSMG_model <- lmer(
+      data = focal_data_100_runs12 %>% filter(ROI_name_final == "supramarginal_L"),
+      formula = meanbeta ~ event * domain + (1|subjectID)
+    )
+
+plot(allEffects(LSMG_model))
+# check_model(LSMG_model)
+check_outliers(LSMG_model)
+summary(LSMG_model)
+
+LSMG_results_bydomain_top100 <-
+  lsmeans(LSMG_model, pairwise ~ event |
+            domain)$contrasts %>% as.data.frame()
+
+knitr::kable(LSMG_results_bydomain_top100)
+
+# write_rds(LSMG_results_bydomain_top100, path = here("outputs/univariate_results/LSMG_results_bydomain_top100.Rds"))
+
+
+LSMG_model_simpler <- lmer(
+      data = focal_data_100_runs12 %>% filter(ROI_name_final == "supramarginal_L"),
+      formula = meanbeta ~ event + domain + (1|subjectID)
+    )
+# check_model(LSMG_model_simpler)
+check_outliers(LSMG_model_simpler)
+
+LSMG_model_comparison <- anova(LSMG_model_simpler, LSMG_model) %>%
+  as.data.frame()
+
+# write_rds(LSMG_model_comparison, path = here("outputs/univariate_results/LSMG_model_comparison_top100.Rds"))
+```
+
+```{r}
+RSMG_model <- lmer(
+      data = focal_data_100_runs12 %>% filter(ROI_name_final == "supramarginal_R"),
+      formula = meanbeta ~ event * domain + (1|extracted_run_number) + (1|subjectID)
+    )
+summary(RSMG_model)
+# 
+# RSMG_model %>%
+#   apa_print() %>%
+#   apa_table()
+# check_model(RSMG_model)
+check_outliers(RSMG_model)
+lsmeans(RSMG_model, pairwise ~ event | domain)$contrasts
+```
+
+
+```{r}
+RSTS_model <- lmer(
+      data = focal_data_100_runs12 %>% filter(ROI_name_final == "superiortemporal_R"),
+      formula = meanbeta ~ event * domain + (1|extracted_run_number) + (1|subjectID)
+    )
+summary(RSTS_model)
+
+# RSTS_model %>%
+#   apa_print() %>%
+#   apa_table()
+
+# check_model(RSTS_model)
+check_outliers(RSTS_model)
+lsmeans(RSTS_model, pairwise ~ event | domain)$contrasts
+
+```
+
+```{r}
+LSTS_model <- lmer(
+      data = focal_data_100_runs12 %>% filter(ROI_name_final == "superiortemporal_L"),
+      formula = meanbeta ~ event * domain + (1|extracted_run_number) + (1|subjectID)
+    )
+summary(LSTS_model)
+# LSTS_model %>%
+#   apa_print() %>%
+#   apa_table()
+
+# check_model(LSTS_model)
+check_outliers(LSTS_model)
+outliers_list <- check_outliers(LSTS_model)
+insight::get_data(LSTS_model)[outliers_list, ]
+
+LSTS_model_nooutliers <- lmer(
+      data = insight::get_data(LSTS_model) %>%
+        filter(meanbeta != -11.6),
+      formula = meanbeta ~ event * domain + (1|extracted_run_number) + (1|subjectID)
+    )
+# summary(LSTS_model_nooutliers)
+LSTS_model_nooutliers %>%
+  apa_print() %>%
+  apa_table()
+ 
+lsmeans(LSTS_model_nooutliers, pairwise ~ event | domain)$contrasts
+```
+
+
+
+# PART 1b: Sensitivity to voxel N
+```{r}
+
+focal_modelsummaries <- modelsummaries %>%
+  filter(focal_region == 1)
+
+focal_modelsummaries$top_n_voxels <- factor(focal_modelsummaries$top_n_voxels, levels = c("10", "50", "100", "150", "200", "250", "300"))
+focal_modelsummaries$extracted_run_number <- factor(focal_modelsummaries$extracted_run_number, levels = c("run1", "run2", "run3", "run4", "runs12", "all_runs"))
+
+ggplot(focal_modelsummaries %>%
+         filter(str_length(extracted_run_number) == 4,
+                effect != "intercept"), aes(extracted_run_number, d, colour = top_n_voxels)) +
+  geom_point() +
+  geom_line(aes(group = top_n_voxels)) +
+  ylab("Cohen's D") +
+  facet_wrap(~ effect + factor(ROI, levels = c("supramarginal_L", "supramarginal_R", "superiortemporal_L", "superiortemporal_R", "antParietal_bilateral", "precentral_inferiorfrontal_R", "V1_bilateral", "MT_bilateral")), nrow = 3) +
+  # coord_cartesian(ylim = c(-.75, .75)) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+
+
+
+# PART 2: All regions (exploratory)
+
+Then we repeat the same modeling procedure on these regions. But this time, we fit an interaction between event and domain in all regions, because some MD regions appear to have a preference for physical events, and it is an open question, if this is true, whether they too could encode physical prediction error. 
+
+```{r}
+DT::datatable(modelsummaries %>% filter(focal_region == 1, top_n_voxels == 100, extracted_run_number == "runs12") %>% arrange(effect))
+
+```
+
+This set of regions includes left and right V1, MT, insula, and IFG (rather than bilateral). The bilateral versions of these ROIs are not included in this portion of the analysis. 
+
+```{r}
+DT::datatable(modelsummaries %>% filter(focal_region == 0, top_n_voxels == 100, extracted_run_number == "runs12") %>% arrange(effect), options = list(scrollX = TRUE))
+```
+
+
+# PART 3: Action-env scenarios 
+
+## Check for run X event effects
+```{r}
+focal_data_both_100 <- focal_data %>%
+  filter(event != "fam",
+         top_n_voxels == "100",
+         domain == "both")
+```
+
+```{r, fig.height=10}
+options(contrasts = c("contr.sum", "contr.poly"))
+
+checkdata_both <- focal_data_both_100 %>%
+  filter(ROI_name_final != "V1_bilateral",
+         ROI_name_final != "MT_bilateral",
+         str_length(extracted_run_number) == 4)
+
+checkdata_both$fixation_position <- as.factor(checkdata_both$fixation_position)
+
+checkdata_both$event <- relevel(checkdata_both$event, ref = "unexp")
+
+checkmodel_bothdomains <- lmer(
+  data = checkdata_both,
+  formula = meanbeta ~ event * extracted_run_number + (1|subjectID) + (1|ROI_name_final)
+)
+
+summary(checkmodel_bothdomains)
+# checkmodel %>%
+#   apa_print() %>%
+#   apa_table()
+
+plot(allEffects(checkmodel_bothdomains))
+
+lsmeans(checkmodel_bothdomains, pairwise ~ event | extracted_run_number)$contrasts
+
+model_habituation_results <- cbind(gen.m(checkmodel_bothdomains), gen.ci(checkmodel_bothdomains)[3:10,])
+
+model_habituation_results_byrun <- lsmeans(checkmodel_bothdomains, pairwise ~ event | extracted_run_number, pbkrtest.limit = 3048)$contrasts %>% as.data.frame()
+```
+
+```{r}
+# write_rds(model_habituation_results, path = here("outputs/univariate_results/habituation_over_runs_psych-env_modelsummary.Rds"))
+# write_rds(model_habituation_results_byrun, path = here("outputs/univariate_results/habituation_over_runs_psych-env_perrun.Rds"))
+```
+
+
+```{r}
+
+univariate_data_both <- univariate_data %>%
+    filter(event != "fam",
+         # top_n_voxels == "100",
+         domain == "both",
+         str_length(extracted_run_number) == 4)
+
+ROIs <- levels(as.factor(univariate_data_both$ROI_name_final))
+runs <- c("run1", "run2", "run3", "run4", "all_runs", "runs12")
+# top_n_voxels <- 100
+modelsummaries_both_init <- data.frame()
+
+```
+
+## Model tables
+```{r, eval = FALSE}
+
+for (ROI in ROIs) {
+  curROI <- ROI
+
+  
+  for (topN in top_n_voxels) {
+    cur_top_voxels_N <- topN
+    
+    for (run in runs) {
+      curRun <- run
+      
+      if (curRun != "all_runs" & curRun != "runs12") {
+        ROIdata <- univariate_data_both %>%
+          filter(ROI_name_final == curROI,
+                 top_n_voxels == topN,
+                 extracted_run_number == curRun)
+        
+      } else if (curRun == "all_runs") {
+        ROIdata <- univariate_data_both %>%
+          filter(ROI_name_final == curROI,
+                 top_n_voxels == topN)
+        
+      } else if (curRun == "runs12") {
+        ROIdata <- univariate_data_both %>%
+          filter(ROI_name_final == curROI,
+                 top_n_voxels == topN) %>%
+          filter(extracted_run_number == "run1" |
+                   extracted_run_number == "run2")
+      }
+      
+      if (ROIdata$ROI_category[1] %in% domain_specific_regions) {
+        ROI_category <- "specific"
+      }
+      else {
+        ROI_category <- "general"
+      }
+      
+      model <- lmer(data = ROIdata,
+                    formula = meanbeta ~ event + (1 | subjectID))
+      
+      focal_region <- ROIdata$focal_region[1]
+      
+      model_null <-
+        update(model, formula = ~ . - event)  # Without interaction term
+      
+      BF_BIC_event <-
+        data.frame(BF = exp((BIC(model_null) - BIC(model)) / 2),
+                   BF_interpretation = interpret_bf(exp((
+                     BIC(model_null) - BIC(model)
+                   ) / 2)))  # BICs to Bayes factor
+      
+      # BF_initial <- rbind(BF_BIC_event)
+      
+      rownames(BF_BIC_event) <- c("event1")
+      
+      BFs <- rbind(BF_intercept_row,
+                   BF_BIC_event)
+      
+      effect_sizes_initial <- lme.dscore(model, ROIdata, "lme4") %>%
+        select(d)
+      effect_sizes <-
+        rbind(effect_sizes_intercept_row, effect_sizes_initial)
+      
+      modelsummary <-
+        cbind(
+          cur_top_voxels_N,
+          curRun,
+          ROI_category,
+          focal_region,
+          curROI,
+          rownames(summary(model)$coefficients),
+          summary(model)$coefficients,
+          confint.merMod(model)[3:4,],
+          effect_sizes,
+          BFs
+        ) %>%
+        as.data.frame()
+      
+      colnames(modelsummary) <-
+        c(
+          "top_n_voxels",
+          "extracted_run_number",
+          "domain",
+          "focal_region",
+          "ROI",
+          "effect",
+          "B",
+          "SE",
+          "df",
+          "t",
+          "p",
+          "CI_95_lower",
+          "CI_95_upper",
+          "d",
+          "BF",
+          "BF_interpretation"
+        )
+      
+      
+      modelsummaries_both_init <-
+        rbind(modelsummaries_both_init, modelsummary)
+      cat(
+        tab_model(
+          model,
+          show.std = TRUE,
+          show.se = TRUE,
+          show.stat = TRUE,
+          auto.label = TRUE,
+          title = paste0(
+            "Exploratory Univariate ROI results for events from both domains, run = ",
+            curRun,
+            curROI
+          )
+        )$knitr,
+        "  \n  \n"
+      )
+    }
+  }
+}
+
+```
+
+```{r, eval = FALSE}
+
+modelsummaries_both <- modelsummaries_both_init %>%
+  mutate_at(c(7:15), as.numeric) %>%
+  mutate(star = as.factor(
+           case_when(p < .001 ~ "***",
+                     p < .01 ~ "**",
+                     p < .05 ~ "*",
+                     p < .1 ~ "~",
+                     TRUE ~ " ")
+         )) %>%
+  mutate(p = round(p, digits = 3))
+
+modelsummaries_both$effect <- 
+  as.factor(modelsummaries_both$effect)
+
+levels(modelsummaries_both$effect) <-
+  c("intercept", "event")
+
+rownames(modelsummaries_both) <- NULL
+
+
+# write_rds(modelsummaries_both, here("outputs/univariate_analysis_outputs/univar_results_psych-env_allregions_alltopN.Rds"))
+
+```
+
+```{r}
+modelsummaries_both <- read_rds( here("outputs/univariate_results/univar_results_psych-env_allregions_alltopN.Rds"))
+```
+
+
+## Visualize
+
+Effects by run and ROI size
+
+```{r}
+modelsummaries_both$extracted_run_number <- factor(modelsummaries_both$extracted_run_number, levels = c("run1", "run2", "run3", "run4", "runs12", "all_runs")) 
+
+modelsummaries_both_focal <- modelsummaries_both %>% filter(focal_region == 1, effect == "event")
+
+ggplot(modelsummaries_both_focal %>% filter(str_length(extracted_run_number) == 4), aes(extracted_run_number, d, colour = top_n_voxels)) +
+  geom_point() +
+  geom_line(aes(group = top_n_voxels)) +
+  # geom_errorbar(aes(ymin = B - SE, ymax = B + SE, width = 0.1)) +
+  # ylab("Bayes Factor (log)") +
+  ylab("Cohen's D") +
+  facet_wrap(~ effect + ROI, nrow = 1) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+
+### Snsitivity to top voxel N
+```{r}
+focal_modelsummaries <- modelsummaries_both %>%
+  filter(focal_region == 1,
+         str_length(extracted_run_number) == 4)
+
+focal_modelsummaries$top_n_voxels <- factor(focal_modelsummaries$top_n_voxels, levels = c("10", "50", "100", "150", "200", "250", "300"))
+focal_modelsummaries$extracted_run_number <- factor(focal_modelsummaries$extracted_run_number, levels = c("run1", "run2", "run3", "run4"))
+
+ggplot(
+  focal_modelsummaries %>%
+    filter(str_length(extracted_run_number) == 4,
+           effect == "event"),
+  aes(extracted_run_number, d, colour = top_n_voxels)
+) +
+  geom_point() +
+  geom_line(aes(group = top_n_voxels)) +
+  ylab("Cohen's D") +
+  facet_wrap( ~ effect + factor(
+    ROI,
+    levels = c(
+      "supramarginal_L",
+      "supramarginal_R",
+      "superiortemporal_L",
+      "superiortemporal_R",
+      "antParietal_bilateral",
+      "precentral_inferiorfrontal_R",
+      "V1_bilateral",
+      "MT_bilateral"
+    )
+  ), nrow = 1) +
+  # coord_cartesian(ylim = c(-.75, .75)) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text.x = element_text(
+    angle = 90,
+    vjust = 0.5,
+    hjust = 1
+  )) 
+```
+
+## All regions, all runs
+```{r}
+DT::datatable(modelsummaries_both %>% filter(extracted_run_number == "all_runs") %>% arrange(effect, focal_region), options = list(scrollX = TRUE))
+```
+
+## All regions, runs 1-2
+
+```{r}
+DT::datatable(modelsummaries_both %>% filter(extracted_run_number == "runs12") %>% arrange(effect, focal_region), options = list(scrollX = TRUE))
+```
+
+# PART 4: Using VOE runs 3-4 to localize
+
+Here we repeat the same analysis as confirmatory analyses above, except that we use VOE runs 3-4 to localize STS and SMG, and we search for voxels in the domain general ROI parcels that respond more to unexp than exp, to ask whether there are any voxels that show the VOE response in those regions, without considering the localizer data. 
+```{r}
+univariate_data_VOEextract <-
+  readRDS(here("outputs", "univariate_data", "study2_univariate_data_VOEextract.Rds"))
+
+univariate_summary_domain_VOEextract <-
+  readRDS(here("outputs", "descriptive_summaries", "study2_univariate_summary_domain_VOEextract.Rds"))
+
+univariate_summary_domain_runs12_VOEextract <-
+  readRDS(here("outputs", "descriptive_summaries", "study2_univariate_summary_domain_runs12_VOEextract.Rds"))
+
+```
+
+
+```{r}
+focal_data_VOEextract <- univariate_data_VOEextract %>%
+  filter(focal_region == 1)
+
+focal_summary_domain_VOEextract <- univariate_summary_domain_VOEextract %>%
+  filter(focal_region == 1)
+
+focal_summary_domain_runs12_VOEextract <- univariate_summary_domain_runs12_VOEextract %>%
+    filter(focal_region == 1)
+
+
+domain_specific_regions <- c("physics", "psychology")
+domain_general_regions <- c("early_visual", "MD")
+
+regions <- levels(as.factor(focal_data_VOEextract$ROI_name_final))
+
+```
+
+## Plots
+
+First, here are plots of betas, run by run, to physics and psychology events (familiarization, expected, unexpected).
+
+```{r echo=FALSE}
+plot_univar_runbyrun <- function(region) {
+  plotobject <-
+    ggplot(
+      data = focal_summary_domain_VOEextract %>% filter(
+        str_detect(ROI_name_final, region),
+        # (extracted_run_number == "all_runs")
+        str_length(extracted_run_number) == 4,
+        # domain != "both"
+      ),
+      aes(x = event, y = meanbeta, fill = domain)
+    ) +
+    geom_bar(stat = "identity", aes(alpha = event), colour = "black") +
+    geom_errorbar(
+      aes(ymin = meanbeta - se, ymax = meanbeta + se),
+      position = position_dodge(width = .9),
+      width = .2,
+      colour = "black"
+    ) +
+    geom_point(data = focal_data_VOEextract %>% filter(str_detect(ROI_name_final, region), str_length(extracted_run_number) == 4, 
+                                            # domain != "both"
+),
+               alpha = .1) +
+    geom_line(data = focal_data_VOEextract %>% filter(str_detect(ROI_name_final, region), str_length(extracted_run_number) == 4, 
+                                           # domain != "both"
+),
+              aes(group =
+                    subjectID),
+              alpha = .1) +
+    theme_cowplot(10) +
+    # facet_wrap(~ ROI_name_final + domain, nrow = 1) +
+    facet_wrap( ~ ROI_name_final + domain + extracted_run_number, nrow = 1) +
+    scale_fill_manual(values = c("#ca3ad7","#00AFBB", "#FC4E07")) + # ,
+    ylab("Average beta") +
+    xlab("Event") +
+    theme(axis.text.x = element_text(
+      angle = 90,
+      vjust = 0.5,
+      hjust = 1
+    )) +
+    coord_cartesian(ylim = c(-2, 11)) +
+    ggtitle(paste0("ROI:", region)) 
+  
+  plotobject
+}
+```
+
+
+```{r}
+plot_univar_runbyrun("superiortemporal_L")
+plot_univar_runbyrun("superiortemporal_R")
+plot_univar_runbyrun("supramarginal_L")
+plot_univar_runbyrun("supramarginal_R")
+plot_univar_runbyrun("antParietal_bilateral")
+plot_univar_runbyrun("precentral_inferiorfrontal_R")
+plot_univar_runbyrun("V1_bilateral")
+plot_univar_runbyrun("MT_bilateral")
+```
+
+```{r echo=FALSE}
+plot_univar_runs12 <- function(region, ymin, ymax) {
+  plotobject <-
+    ggplot(
+      data = focal_summary_domain_runs12_VOEextract %>% filter(
+        str_detect(ROI_name_final, region),
+        domain != "both",
+        event != "fam"
+      ),
+      aes(x = event, y = meanbeta, fill = domain)
+    ) +
+    geom_bar(stat = "identity", aes(alpha = event), colour = "black") +
+  geom_errorbar(
+      aes(ymin = meanbeta - se, ymax = meanbeta + se),
+      position = position_dodge(width = .9),
+      width = .3,
+      colour = "black"
+    ) +
+    geom_point(data = focal_data_VOEextract %>% filter(str_detect(ROI_name_final, region),         (extracted_run_number == "run1" | extracted_run_number == "run2"),
+                                            event != "fam",
+                                            domain != "both"
+),
+               alpha = .1) +
+    theme_cowplot(10) +
+    facet_wrap( ~ ROI_name_final + domain + LR, nrow = 1) +
+    scale_fill_manual(values = c("#00AFBB", "#FC4E07")) + # ,"#ca3ad7",
+    ylab("Average beta") +
+    xlab("Event") +
+    theme(axis.text.x = element_text(
+      angle = 90,
+      vjust = 0.5,
+      hjust = 1
+    )) +
+    theme(legend.position = "none") +
+    coord_cartesian(ylim = c(ymin, ymax)) +
+    ggtitle(paste0("ROI:", region)) 
+  
+  plotobject
+}
+```
+
+```{r}
+DS_runs12_plots <- plot_univar_runs12("superiortemporal", 0, 4) |
+plot_univar_runs12("supramarginal", 0, 4) 
+
+DG_runs12_plots <- plot_univar_runs12("precentral_inferiorfrontal_R", 0, 4) | plot_univar_runs12("antParietal_bilateral", 0, 4) | plot_univar_runs12("V1_bilateral", 0, 11) | plot_univar_runs12("MT_bilateral", 0, 11)
+
+DS_runs12_plots / DG_runs12_plots
+```
+
+```{r, eval = FALSE}
+focal_data_100_runs12_VOEextract <- focal_data_VOEextract %>%
+  filter(
+         event != "fam",
+         top_n_voxels == "100",
+         domain != "both",
+         (extracted_run_number == "run1" | extracted_run_number == "run2"))
+
+ROIs <- levels(as.factor(focal_data_100_runs12_VOEextract$ROI_name_final))
+
+focal_data_100_runs12_VOEextract$event <- relevel(focal_data_100_runs12_VOEextract$event, ref = "exp")
+
+
+focal_modelsummaries_100_VOEextract_init <- data.frame()
+
+```
+
+## Model Tables
+
+### Psych-action and physics events
+```{r, eval = FALSE}
+for (ROI in ROIs) {
+  curROI <- ROI
+  ROIdata <-
+    focal_data_100_runs12_VOEextract %>% filter(ROI_name_final == curROI)
+  # print("Current ROI: ", curROI)
+  if (ROIdata$ROI_category[1] %in% domain_specific_regions) {
+    ROI_category <- "specific"
+    model <- lmer(
+      data = ROIdata,
+      formula = meanbeta ~ event * domain + (1|subjectID)) # had to remove run random int (convergence))
+      } else {
+        ROI_category <- "general"
+        model <- lmer(data = ROIdata,
+                      formula = meanbeta ~ event * domain + (1|subjectID))
+      }
+  
+  model_just_maineffects <- update(model, formula = ~ . -event:domain)  # Without interaction term
+  model_just_domain <- update(model_just_maineffects, formula = ~ . -event)
+  model_just_event <- update(model_just_maineffects, formula = ~ . -domain)
+  
+  BF_BIC_interaction <- data.frame(BF = exp((BIC(model_just_maineffects) - BIC(model))/2), BF_interpretation = interpret_bf(exp((BIC(model_just_maineffects) - BIC(model))/2)))  # BICs to Bayes factor
+  
+  BF_BIC_event <- data.frame(BF = exp((BIC(model_just_domain) - BIC(model_just_maineffects))/2),
+                             BF_interpretation = interpret_bf(exp((BIC(model_just_domain) - BIC(model_just_maineffects))/2)))
+  
+  BF_BIC_domain <- data.frame(BF = exp((BIC(model_just_event) - BIC(model_just_maineffects))/2),
+                              BF_interpretation = interpret_bf(exp((BIC(model_just_event) - BIC(model_just_maineffects))/2)))
+  
+  BF_initial <- rbind(BF_BIC_event,
+                      BF_BIC_domain,
+                      BF_BIC_interaction)
+  
+  rownames(BF_initial) <- rownames_no_intercept
+  BFs <- rbind(BF_intercept_row,
+               BF_initial)
+    
+  effect_sizes_initial <- lme.dscore(model, ROIdata, "lme4") %>% 
+    select(d)
+  effect_sizes <- rbind(effect_sizes_intercept_row, effect_sizes_initial)
+  
+  
+      ROI_focal <- ROIdata$focal_region[1]
+
+      modelsummary <-
+        cbind(
+          ROI_category,
+          ROI_focal,
+          curROI,
+          rownames(summary(model)$coefficients),
+          summary(model)$coefficients,
+          confint.merMod(model)[3:6, ],
+          effect_sizes,
+          BFs
+        ) %>%
+        as.data.frame()
+      
+      colnames(modelsummary) <-
+        c(
+          "domain",
+          "focal_region",
+          "ROI",
+          "effect",
+          "B",
+          "SE",
+          "df",
+          "t",
+          "p",
+          "CI_95_lower",
+          "CI_95_upper",
+          "d",
+          "BF",
+          "BF_interpretation"
+        )
+ 
+  focal_modelsummaries_100_VOEextract_init <-
+    rbind(focal_modelsummaries_100_VOEextract_init, modelsummary)
+  # model_parameters(model) %>% print_md()
+  cat(
+    tab_model(
+      model,
+      show.std = TRUE,
+      show.se = TRUE,
+      show.stat = TRUE,
+      auto.label = TRUE,
+      title = paste0("Explratory Univariate ROI results (localized using VOE runs 3-4) in: ", curROI)
+    )$knitr,
+    "  \n  \n"
+  )
+  # focal_modeltables_100 <- append(focal_modeltables_100, cur_tab)
+  
+  }
+
+```
+
+```{r, eval = FALSE}
+focal_modelsummaries_100_VOEextract <- focal_modelsummaries_100_VOEextract_init %>%
+  mutate_at(c(5:13), as.numeric) %>%
+  mutate(star = as.factor(
+           case_when(p < .001 ~ "***",
+                     p < .01 ~ "**",
+                     p < .05 ~ "*",
+                     p < .1 ~ "~",
+                     TRUE ~ " ")
+         )) %>%
+  mutate(p = round(p, digits = 3))
+
+focal_modelsummaries_100_VOEextract$effect <-
+  as.factor(focal_modelsummaries_100_VOEextract$effect)
+
+levels(focal_modelsummaries_100_VOEextract$effect) <-
+  c("intercept", "domain", "event", "event:domain")
+
+rownames(focal_modelsummaries_100_VOEextract) <- NULL
+
+
+# write_rds(focal_modelsummaries_100_VOEextract, here("outputs/univariate_results/univar_results_top100_VOE-extract_runs12.Rds"))
+
+```
+
+```{r}
+focal_modelsummaries_100_VOEextract <- read_rds(here("outputs/univariate_results/univar_results_top100_VOE-extract_runs12.Rds"))
+
+DT::datatable(dplyr::arrange(focal_modelsummaries_100_VOEextract, effect), options = list(scrollX = TRUE))
+
+```
+
+### Psych-env events
+```{r, eval = FALSE}
+focal_data_100_runs1234_VOEextract_bothdomains <-
+  focal_data_VOEextract %>%
+  filter(
+    event != "fam",
+    top_n_voxels == "100",
+    domain == "both",
+    str_length(extracted_run_number) == 4
+  )
+
+ROIs <-
+  levels(as.factor(
+    focal_data_100_runs1234_VOEextract_bothdomains$ROI_name_final
+  ))
+
+focal_data_100_runs1234_VOEextract_bothdomains$event <-
+  relevel(focal_data_100_runs1234_VOEextract_bothdomains$event, ref = "unexp")
+
+
+focal_modelsummaries_100_VOEextract_bothdomains_init <- data.frame()
+
+```
+
+```{r eval = FALSE}
+
+for (ROI in ROIs) {
+  curROI <- ROI
+  cur_top_voxels_N <- 100  
+  curRun <- "runs12"
+
+  ROIdata <- focal_data_100_runs1234_VOEextract_bothdomains %>%
+    filter(ROI_name_final == curROI) %>%
+    filter(extracted_run_number == "run1" |
+             extracted_run_number == "run2")
+  
+  if (ROIdata$ROI_category[1] %in% domain_specific_regions) {
+    ROI_category <- "specific"
+  }
+  else {
+    ROI_category <- "general"
+  }
+  
+  model <- lmer(data = ROIdata,
+                formula = meanbeta ~ event + (1 | subjectID))
+  
+  focal_region <- ROIdata$focal_region[1]
+  
+  model_null <-
+    update(model, formula = ~ . - event)  # Without interaction term
+  
+  BF_BIC_event <-
+    data.frame(BF = exp((BIC(model_null) - BIC(model)) / 2),
+               BF_interpretation = interpret_bf(exp((
+                 BIC(model_null) - BIC(model)
+               ) / 2)))  # BICs to Bayes factor
+  
+  # BF_initial <- rbind(BF_BIC_event)
+  
+  rownames(BF_BIC_event) <- c("event1")
+  
+  BFs <- rbind(BF_intercept_row,
+               BF_BIC_event)
+  
+  effect_sizes_initial <- lme.dscore(model, ROIdata, "lme4") %>%
+    select(d)
+  effect_sizes <-
+    rbind(effect_sizes_intercept_row, effect_sizes_initial)
+  
+  modelsummary <-
+    cbind(
+      cur_top_voxels_N,
+      curRun,
+      ROI_category,
+      focal_region,
+      curROI,
+      rownames(summary(model)$coefficients),
+      summary(model)$coefficients,
+      confint.merMod(model)[3:4, ],
+      effect_sizes,
+      BFs
+    ) %>%
+    as.data.frame()
+  
+  colnames(modelsummary) <-
+    c(
+      "top_n_voxels",
+      "extracted_run_number",
+      "domain",
+      "focal_region",
+      "ROI",
+      "effect",
+      "B",
+      "SE",
+      "df",
+      "t",
+      "p",
+      "CI_95_lower",
+      "CI_95_upper",
+      "d",
+      "BF",
+      "BF_interpretation"
+    )
+      
+  
+  
+  focal_modelsummaries_100_VOEextract_bothdomains_init <-
+    rbind(focal_modelsummaries_100_VOEextract_bothdomains_init,
+          modelsummary)
+  cat(
+    tab_model(
+      model,
+      show.std = TRUE,
+      show.se = TRUE,
+      show.stat = TRUE,
+      auto.label = TRUE,
+      title = paste0(
+        "Exploratory Univariate ROI results for events from both domains, run = ",
+        curRun,
+        curROI
+      )
+    )$knitr,
+    "  \n  \n"
+  )
+}
+
+
+```
+
+```{r, eval = FALSE}
+
+focal_modelsummaries_100_VOEextract_bothdomains <- focal_modelsummaries_100_VOEextract_bothdomains_init %>%
+  mutate_at(c(7:15), as.numeric) %>%
+  mutate(star = as.factor(
+           case_when(p < .001 ~ "***",
+                     p < .01 ~ "**",
+                     p < .05 ~ "*",
+                     p < .1 ~ "~",
+                     TRUE ~ " ")
+         )) %>%
+  mutate(p = round(p, digits = 3))
+
+focal_modelsummaries_100_VOEextract_bothdomains$effect <- 
+  as.factor(focal_modelsummaries_100_VOEextract_bothdomains$effect)
+
+levels(focal_modelsummaries_100_VOEextract_bothdomains$effect) <-
+  c("intercept", "event")
+
+rownames(focal_modelsummaries_100_VOEextract_bothdomains) <- NULL
+
+# write_rds(focal_modelsummaries_100_VOEextract_bothdomains, here("outputs/univariate_results/univar_results_psych-env_top100_VOE-extract_runs12.Rds"))
+
+```
+
+```{r}
+focal_modelsummaries_100_VOEextract_bothdomains <- read_rds( here("outputs/univariate_results/univar_results_psych-env_top100_VOE-extract_runs12.Rds"))
+```
+
+```{r}
+DT::datatable(focal_modelsummaries_100_VOEextract_bothdomains, options = list(scrollX = TRUE))
+```
+
+
+ 
+
+# PART 5: Single betas
+```{r}
+single_betas0 <- readRDS(here("outputs/univariate_data/study2_univariate_data_singlebetas.Rds")) %>%
+  select(-ROI_category)
+
+regioninfo_category <- regioninfo %>%
+  select(ROI_name_final, ROI_category)
+
+single_betas <- left_join(single_betas0, regioninfo_category)
+
+single_betas$ROI_name_final <- as.factor(single_betas$ROI_name_final) 
+
+single_betas$event <- as.factor(single_betas$event)
+single_betas$event <- relevel(single_betas$event, ref = "fam")
+single_betas$task <- factor(single_betas$task, levels = c("solidity", "permanence", "goal", "efficiency", "agent-solidity", "infer-constraint"))
+```
+
+```{r}
+single_betas_summary_domain <- readRDS(here("outputs/descriptive_summaries/study2_univariate_summary_domain_singlebetas.Rds"))
+
+single_betas_summary_task <- readRDS(here("outputs/descriptive_summaries/study2_univariate_summary_task_singlebetas.Rds"))
+
+single_betas_summary_scenario <- readRDS(here("outputs/descriptive_summaries/study2_univariate_summary_scenario_singlebetas.Rds"))
+
+single_betas_summary_scenario$event <- relevel(single_betas_summary_scenario$event, ref = "fam")
+```
+
+
+```{r}
+single_betas_focal <- single_betas %>%
+  filter(focal_region == 1)
+```
+
+## Plots
+
+
+```{r}
+
+# solidity - 25a88b
+# permanence - 19626a
+# goal - f24b00
+# efficiency - deae1e
+# agent-solidity - 6600cd 
+# missing-barrier - fba0d0
+
+  
+ggplot(
+  single_betas_focal %>%
+    filter(
+      str_length(extracted_run_number) == 4,
+      event != "fam"
+    ),
+  aes(task, meanbeta, alpha = event, fill = task)
+) +
+  geom_bar(
+    position = "dodge",
+    stat = "summary",
+    fun.data = "mean_se",
+    colour = "black"
+  ) +
+  geom_errorbar(
+    position = "dodge",
+    stat = "summary",
+    fun.data = "mean_se",
+    colour = "black"
+  ) +
+  scale_fill_manual(values = c(
+    "#25a88b",
+    "#19626a",
+    "#f24b00",
+    "#deae1e",
+    "#6600cd",
+    "#fba0d0"
+  )) + # ,
+  # geom_point() +
+  theme(axis.text.x = element_blank()) +
+  # scale_alpha_continuous(range = c(0.5, 1)) +
+  facet_wrap( ~ ROI_name_final, scales = "free", nrow = 2) +
+  ggtitle("Runs 1-4, Focal regions")
+```
+
+```{r}
+ggplot(
+  single_betas_focal %>%
+    filter(ROI_name_final == "supramarginal_L"),
+  aes(
+    vis_statistics_video_group,
+    meanbeta,
+    alpha = event,
+    fill = task
+  )
+) +
+  geom_bar(
+    position = "dodge",
+    stat = "summary",
+    fun.data = "mean_se",
+    colour = "black"
+  ) +
+  geom_errorbar(
+    position = "dodge",
+    stat = "summary",
+    fun.data = "mean_se",
+    colour = "black"
+  ) +
+  scale_fill_manual(values = c(
+    "#25a88b",
+    "#19626a",
+    "#f24b00",
+    "#deae1e",
+    "#6600cd",
+    "#fba0d0"
+  )) +
+  theme(axis.text.x = element_text(
+    angle = 90,
+    vjust = 0.5,
+    hjust = 1
+  )) +
+  ggtitle("Region: supramarginal_L")
+```
+
+Plotting each event type in each task against run number, per ROI.
+
+```{r}
+ggplot(single_betas_focal, aes(as.integer(extracted_run_number), meanbeta, colour = event)) +
+  geom_smooth(method = "glm") +
+  facet_wrap( ~ ROI_name_final + task, nrow = 3, scales = "free") +
+  scale_colour_brewer(palette = "Set2")
+
+```
+
+Visualizing visual features against responses.
+
+```{r}
+ggplot(single_betas_focal,
+       aes(normalized_iqr_contrast, meanbeta)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap( ~ ROI_name_final, nrow = 2, scales = "free")
+
+ggplot(single_betas_focal,
+       aes(normalized_mean_luminance, meanbeta)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap( ~ ROI_name_final, nrow = 2, scales = "free")
+
+ggplot(single_betas_focal,
+       aes(normalized_mean_motion, meanbeta)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap( ~ ROI_name_final, nrow = 2, scales = "free")
+
+ggplot(single_betas_focal,
+       aes(normalized_mean_hsf, meanbeta)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap( ~ ROI_name_final, nrow = 2, scales = "free")
+
+ggplot(single_betas_focal,
+       aes(normalized_mean_lsf, meanbeta)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap( ~ ROI_name_final, nrow = 2, scales = "free")
+
+ggplot(single_betas_focal,
+       aes(normalized_mean_rect, meanbeta)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap( ~ ROI_name_final, nrow = 2, scales = "free")
+
+ggplot(single_betas_focal,
+       aes(normalized_mean_curv, meanbeta)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap( ~ ROI_name_final, nrow = 2, scales = "free")
+```
+
+## Modeling
+```{r}
+single_betas_focal$event <- relevel(single_betas_focal$event, ref = "unexp")
+```
+
+```{r}
+single_betas_focal_psychphys_runs12 <- single_betas_focal %>%
+  filter(domain != "psychology-environment",
+         event != "fam") %>%
+  filter(extracted_run_number == "run1" | extracted_run_number == "run2")
+
+ROIs <- unique(single_betas_focal_psychphys_runs12$ROI_name_final) %>% as.vector()
+
+single_betas_focal_psychphys_runs12_summaries <- data.frame()
+rownames_no_intercept <- c("event1", "domain1", "event:domain")
+
+```
+
+## Model Tables
+```{r, eval = FALSE}
+for (ROI in ROIs) {
+  curROI <- ROI
+  ROIdata <-
+    single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == curROI)
+  # print("Current ROI: ", curROI)
+  if (ROIdata$ROI_category[1] %in% domain_specific_regions) {
+    ROI_category <- "specific"
+    model <- lmer(
+      data = ROIdata,
+      formula = meanbeta ~ event * domain + (1|subjectID) + (1|vis_statistics_video_group) 
+    ) # had to remove run random int (convergence))
+  } else {
+    ROI_category <- "general"
+    model <- lmer(
+      data = ROIdata,
+      formula = meanbeta ~ event * domain + (1|subjectID) + (1|vis_statistics_video_group)
+    )
+  }
+  
+  model_just_maineffects <-
+    update(model, formula = ~ . - event:domain)  # Without interaction term
+  model_just_domain <-
+    update(model_just_maineffects, formula = ~ . - event)
+  model_just_event <-
+    update(model_just_maineffects, formula = ~ . - domain)
+  
+  BF_BIC_interaction <-
+    data.frame(BF = exp((
+      BIC(model_just_maineffects) - BIC(model)
+    ) / 2), BF_interpretation = interpret_bf(exp((
+      BIC(model_just_maineffects) - BIC(model)
+    ) / 2)))  # BICs to Bayes factor
+  
+  BF_BIC_event <-
+    data.frame(BF = exp((
+      BIC(model_just_domain) - BIC(model_just_maineffects)
+    ) / 2),
+    BF_interpretation = interpret_bf(exp((
+      BIC(model_just_domain) - BIC(model_just_maineffects)
+    ) / 2)))
+  
+  BF_BIC_domain <-
+    data.frame(BF = exp((
+      BIC(model_just_event) - BIC(model_just_maineffects)
+    ) / 2),
+    BF_interpretation = interpret_bf(exp((
+      BIC(model_just_event) - BIC(model_just_maineffects)
+    ) / 2)))
+  
+  BF_initial <- rbind(BF_BIC_event,
+                      BF_BIC_domain,
+                      BF_BIC_interaction)
+  
+  rownames(BF_initial) <- rownames_no_intercept
+  BFs <- rbind(BF_intercept_row,
+               BF_initial)
+  
+  effect_sizes_initial <- lme.dscore(model, ROIdata, "lme4") %>%
+    select(d)
+  effect_sizes <-
+    rbind(effect_sizes_intercept_row, effect_sizes_initial)
+  ROI_focal <- ROIdata$focal_region[1]
+  cur_top_voxels_N <- 100
+  curRun <- "runs12"
+  
+  modelsummary <-
+    cbind(
+      cur_top_voxels_N,
+      curRun,
+      ROI_category,
+      ROI_focal,
+      curROI,
+      rownames(summary(model)$coefficients),
+      summary(model)$coefficients,
+      confint.merMod(model)[3:6,],
+      effect_sizes,
+      BFs
+    ) %>%
+    as.data.frame()
+  
+  colnames(modelsummary) <-
+    c(
+      "top_n_voxels",
+      "extracted_run_number",
+      "domain",
+      "focal_region",
+      "ROI",
+      "effect",
+      "B",
+      "SE",
+      "df",
+      "t",
+      "p",
+      "CI_95_lower",
+      "CI_95_upper",
+      "d",
+      "BF",
+      "BF_interpretation"
+    )
+  
+  single_betas_focal_psychphys_runs12_summaries <-
+    rbind(single_betas_focal_psychphys_runs12_summaries,
+          modelsummary)
+  # model_parameters(model) %>% print_md()
+  cat(
+    tab_model(
+      model,
+      show.std = TRUE,
+      show.se = TRUE,
+      show.stat = TRUE,
+      auto.label = TRUE,
+      title = paste0("Single beta Univariate ROI results (runs 1-2) in: ", curROI)
+    )$knitr,
+    "  \n  \n"
+  )
+  # focal_modeltables_100 <- append(focal_modeltables_100, cur_tab)
+  
+}
+
+```
+
+```{r, eval = FALSE}
+single_betas_focal_psychphys_runs12_summaries <- single_betas_focal_psychphys_runs12_summaries %>%
+  mutate_at(c(7:15), as.numeric) %>%
+  mutate(star = as.factor(
+           case_when(p < .001 ~ "***",
+                     p < .01 ~ "**",
+                     p < .05 ~ "*",
+                     p < .1 ~ "~",
+                     TRUE ~ " ")
+         )) %>%
+  mutate(p = round(p, digits = 3))
+
+single_betas_focal_psychphys_runs12_summaries$effect <-
+  as.factor(single_betas_focal_psychphys_runs12_summaries$effect)
+
+
+levels(single_betas_focal_psychphys_runs12_summaries$effect) <-
+  c("intercept", "domain", "event", "event:domain")
+
+rownames(single_betas_focal_psychphys_runs12_summaries) <- NULL
+
+
+# write_rds(single_betas_focal_psychphys_runs12_summaries, here("outputs/univariate_results/univar_results_top100_singlebetas_psych_phys.Rds"))
+
+```
+
+```{r}
+single_betas_focal_psychphys_runs12_summaries <- read_rds(here("outputs/univariate_results/univar_results_top100_singlebetas_psych_phys.Rds"))
+
+DT::datatable(dplyr::arrange(single_betas_focal_psychphys_runs12_summaries, effect), options = list(scrollX = TRUE))
+
+```
+
+## PART 5a: Visual statistics (psych and physics)
+```{r eval = FALSE}
+
+single_betas_focal_visualstats_summary_init <- data.frame()
+
+
+for (ROI in ROIs) {
+  curROI <- ROI
+  ROIdata <-
+    single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == curROI)
+  # print("Current ROI: ", curROI)
+  if (ROIdata$ROI_category[1] %in% domain_specific_regions) {
+    ROI_category <- "specific"
+      } else {
+        ROI_category <- "general"
+      }
+    model <- lmer(data = ROIdata, formula = meanbeta ~ event * domain + normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf + normalized_mean_rect + normalized_mean_curv + (1|subjectID))
+      effect_sizes_initial <- lme.dscore(model, ROIdata, "lme4") %>%
+        select(d)
+      effect_sizes <-
+        rbind(effect_sizes_intercept_row, effect_sizes_initial)
+      
+  ROI_focal <- ROIdata$focal_region[1]
+  cur_top_voxels_N <- 100
+  curRun <- "runs12"
+  
+  modelsummary <-
+    cbind(
+      cur_top_voxels_N,
+      curRun,
+      ROI_category,
+      ROI_focal,
+      curROI,
+      rownames(summary(model)$coefficients),
+      summary(model)$coefficients,
+      confint.merMod(model)[3:12,],
+      effect_sizes
+      # BFs
+    ) %>%
+    as.data.frame()
+  
+  colnames(modelsummary) <-
+    c(
+      "top_n_voxels",
+      "extracted_run_number",
+      "domain",
+      "focal_region",
+      "ROI",
+      "effect",
+      "B",
+      "SE",
+      "df",
+      "t",
+      "p",
+      "CI_95_lower",
+      "CI_95_upper",
+      "d"
+    )
+  
+    single_betas_focal_visualstats_summary_init <-
+    rbind(single_betas_focal_visualstats_summary_init,
+          modelsummary)
+    
+  # model_parameters(model) %>% print_md()
+  # cat(
+  #   tab_model(
+  #     model,
+  #     show.std = TRUE,
+  #     show.se = TRUE,
+  #     show.stat = TRUE,
+  #     auto.label = TRUE,
+  #     title = paste0("Exploratory Univariate ROI results in: ", curROI)
+  #   )$knitr,
+  #   "  \n  \n"
+  # )
+  }
+```
+
+```{r, eval = FALSE}
+single_betas_focal_visualstats_summary <- single_betas_focal_visualstats_summary_init %>%
+  mutate_at(c(7:14), as.numeric) %>%
+  mutate(star = as.factor(
+           case_when(p < .001 ~ "***",
+                     p < .01 ~ "**",
+                     p < .05 ~ "*",
+                     p < .1 ~ "~",
+                     TRUE ~ " ")
+         )) %>%
+  mutate(p = round(p, digits = 3))
+
+single_betas_focal_visualstats_summary$effect <-
+  as.factor(single_betas_focal_visualstats_summary$effect)
+
+
+levels(single_betas_focal_visualstats_summary$effect)[1:4] <-
+  c("intercept", "domain", "event", "event:domain")
+
+rownames(single_betas_focal_visualstats_summary) <- NULL
+
+
+# write_rds(single_betas_focal_visualstats_summary, here("outputs/univariate_results/univar_results_top100_singlebetas_psych_phys_visstats.Rds"))
+
+```
+
+```{r}
+single_betas_focal_visualstats_summary <- read_rds(here("outputs/univariate_results/univar_results_top100_singlebetas_psych_phys_visstats.Rds"))
+
+DT::datatable(dplyr::arrange(single_betas_focal_visualstats_summary, effect), options = list(scrollX = TRUE))
+
+```
+
+```{r, fig.height=10}
+V1_model_singlebetas <- lmer(data = single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == "V1_bilateral"),
+                             formula = meanbeta ~ event * domain +  normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf  + normalized_mean_rect + normalized_mean_curv + (1|extracted_run_number) + (1|subjectID)) 
+
+summary(V1_model_singlebetas)
+check_collinearity(V1_model_singlebetas)
+```
+
+```{r, fig.height=10}
+MT_model_singlebetas <- lmer(data = single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == "MT_bilateral"),
+                             formula = meanbeta ~ event * domain + normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf + normalized_mean_rect + normalized_mean_curv + (1|extracted_run_number) + (1|subjectID)) 
+
+summary(MT_model_singlebetas)
+check_collinearity(MT_model_singlebetas)
+
+```
+
+```{r, fig.height=10}
+APC_model_singlebetas <- lmer(data = single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == "antParietal_bilateral"),
+                             formula = meanbeta ~ event * domain +  normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf  + normalized_mean_rect + normalized_mean_curv + (1|extracted_run_number) + (1|subjectID)) 
+
+summary(APC_model_singlebetas)
+check_collinearity(APC_model_singlebetas)
+
+```
+
+```{r, fig.height=10}
+RFC_model_singlebetas <- lmer(data = single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == "precentral_inferiorfrontal_R"),
+                             formula = meanbeta ~ event * domain +  normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf + normalized_mean_rect + normalized_mean_curv + (1|subjectID)) 
+
+summary(RFC_model_singlebetas)
+check_collinearity(RFC_model_singlebetas)
+```
+
+```{r, fig.height=10}
+RSTS_model_singlebetas <- lmer(data = single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == "superiortemporal_R"),
+                             formula = meanbeta ~ event * domain +  normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf  + normalized_mean_rect + normalized_mean_curv + (1|extracted_run_number) + (1|subjectID)) 
+
+summary(RSTS_model_singlebetas)
+check_collinearity(RSTS_model_singlebetas)
+```
+
+```{r, fig.height=10}
+LSTS_model_singlebetas <- lmer(data = single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == "superiortemporal_L"),
+                             formula = meanbeta ~ event * domain + event_n_within_run +domain * event +  normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf  + normalized_mean_rect + normalized_mean_curv + (1|extracted_run_number) + (1|subjectID)) 
+
+summary(LSTS_model_singlebetas)
+check_collinearity(LSTS_model_singlebetas)
+```
+
+```{r, fig.height=10}
+RSMG_model_singlebetas <- lmer(data = single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == "supramarginal_R"),
+                             formula = meanbeta ~ event * domain +  normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf + normalized_mean_rect + normalized_mean_curv +  (1|extracted_run_number) + (1|subjectID)) 
+
+summary(RSMG_model_singlebetas)
+plot(allEffects(RSMG_model_singlebetas))
+lsmeans(RSMG_model_singlebetas, pairwise ~ event | domain)$contrasts
+check_collinearity(RSMG_model_singlebetas)
+```
+
+```{r, fig.height=10}
+LSMG_model_singlebetas <- lmer(data = single_betas_focal_psychphys_runs12 %>% filter(ROI_name_final == "supramarginal_L"),
+                             formula = meanbeta ~ event * domain +  normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf  + normalized_mean_rect + normalized_mean_curv +  (1|extracted_run_number) + (1|subjectID)) 
+
+summary(LSMG_model_singlebetas)
+plot(allEffects(LSMG_model_singlebetas))
+lsmeans(LSMG_model_singlebetas, pairwise ~ event | domain)$contrasts
+check_collinearity(LSMG_model_singlebetas)
+```
+
+## PART 5b: Per task event analysis
+
+```{r}
+single_betas_pertask_data <- single_betas %>%
+  filter(event != "fam") %>%
+  filter(str_length(extracted_run_number) == 4)
+
+tasks <- unique(single_betas_pertask_data$task)
+ROIs <- unique(single_betas_pertask_data$ROI_name_final)
+single_betas_pertask_data$event <- relevel(single_betas_pertask_data$event, ref = "unexp")
+
+runs <- c("all_runs", "runs12")
+```
+
+```{r, eval = FALSE}
+
+single_betas_pertask_results <- data.frame()
+
+
+for (ROI in ROIs) {
+  curROI <- ROI
+  for (task in tasks) {
+    cur_task <- task
+    
+    for (run in runs) {
+      if (run == "all_runs") {
+        ROIdata <-
+          single_betas_pertask_data %>% filter(ROI_name_final == curROI,
+                                               task == cur_task)
+      }
+      
+      else if (run == "runs12") {
+        ROIdata <-
+          single_betas_pertask_data %>%
+          filter(ROI_name_final == curROI,
+                 task == cur_task) %>%
+          filter(extracted_run_number == "run1" |
+                   extracted_run_number == "run2")
+        
+      }
+      # print("Current ROI: ", curROI)
+      
+      
+      model <- lmer(data = ROIdata,
+                    formula = meanbeta ~ event + (1 | subjectID)) # had to remove run random int (convergence))
+      
+      focal_region <- ROIdata$focal_region[1]
+      task_domain <- as.character(ROIdata$domain[1])
+      ROI_category <- ROIdata$ROI_category[1]
+      
+      
+      model_null <-
+        update(model, formula = ~ . - event)  # Without interaction term
+      
+      BF_BIC_event <-
+        data.frame(BF = exp((BIC(model_null) - BIC(model)) / 2),
+                   BF_interpretation = interpret_bf(exp((
+                     BIC(model_null) - BIC(model)
+                   ) / 2)))  # BICs to Bayes factor
+      
+      # BF_initial <- rbind(BF_BIC_event)
+      
+      rownames(BF_BIC_event) <- c("event1")
+      
+      BFs <- rbind(BF_intercept_row,
+                   BF_BIC_event)
+      
+      effect_sizes_initial <- lme.dscore(model, ROIdata, "lme4") %>%
+        select(d)
+      effect_sizes <-
+        rbind(effect_sizes_intercept_row, effect_sizes_initial)
+      cur_top_voxels_N <- 100
+      curRun <- run
+      modelsummary <-
+        cbind(
+          cur_top_voxels_N,
+          curRun,
+          ROI_category,
+          focal_region,
+          curROI,
+          cur_task,
+          rownames(summary(model)$coefficients),
+          summary(model)$coefficients,
+          confint.merMod(model)[3:4, ],
+          effect_sizes,
+          BFs
+        ) %>%
+        as.data.frame()
+      
+      colnames(modelsummary) <-
+        c(
+          "top_n_voxels",
+          "extracted_run_number",
+          "domain",
+          "focal_region",
+          "ROI",
+          "task",
+          "effect",
+          "B",
+          "SE",
+          "df",
+          "t",
+          "p",
+          "CI_95_lower",
+          "CI_95_upper",
+          "d",
+          "BF",
+          "BF_interpretation"
+        )
+      
+      
+      single_betas_pertask_results <-
+        rbind(single_betas_pertask_results, modelsummary)
+      # model_parameters(model) %>% print_md()
+      cat(
+        tab_model(
+          model,
+          show.std = TRUE,
+          show.se = TRUE,
+          show.stat = TRUE,
+          auto.label = TRUE,
+          title = paste0(
+            "Exploratory Univariate ROI results for the task ",
+            cur_task,
+            "in the region: ",
+            curROI,
+            "in runs ",
+            run
+          )
+        )$knitr,
+        "  \n  \n"
+      )
+    }
+  }
+}
+```
+
+```{r, eval = FALSE}
+single_betas_pertask_results <- single_betas_pertask_results %>%
+  mutate_at(c(8:16), as.numeric) %>%
+  mutate(star = as.factor(
+           case_when(p < .001 ~ "***",
+                     p < .01 ~ "**",
+                     p < .05 ~ "*",
+                     p < .1 ~ "~",
+                     TRUE ~ " ")
+         )) %>%
+  mutate(p = round(p, digits = 3))
+
+single_betas_pertask_results$effect <-
+  as.factor(single_betas_pertask_results$effect)
+
+
+levels(single_betas_pertask_results$effect) <-
+  c("intercept", "event")
+
+rownames(single_betas_pertask_results) <- NULL
+
+
+# write_rds(single_betas_pertask_results, here("outputs/univariate_results/univar_results_top100_singlebetas_pertask.Rds"))
+
+```
+
+```{r}
+single_betas_pertask_results <- read_rds(here("outputs/univariate_results/univar_results_top100_singlebetas_pertask.Rds"))
+DT::datatable(dplyr::arrange(single_betas_pertask_results, extracted_run_number, effect), options = list(scrollX = TRUE))
+```
+
+# Part 6: Overlap of top 100 voxels
+
+```{r}
+overlap_data_prelim <- read_csv(here("input_data/ROI_overlap_outputs_Apr19_2023.csv")) %>%
+  rename(ROI_2 = roi_2,
+         subjID = participantID)
+```
+
+
+```{r}
+MD_physics_APC_bilateral <- overlap_data_prelim %>%
+  filter((
+    ROI_1 == "DOTS_VOE234_phys_p20_cluster-4-right_inflated_notSTS" &
+      ROI_2 == "MD_ROI_3_13_bilateral"
+  ) |
+    (
+      ROI_1 == "DOTS_VOE234_phys_p20_cluster-4-left_inflated_notSTS" &
+        ROI_2 == "MD_ROI_3_13_bilateral"
+    )
+  ) %>% 
+  mutate(hemisphere = "bilateral")
+
+MD_physics_APC_byhem <- overlap_data_prelim %>%
+  filter((
+    ROI_1 == "DOTS_VOE234_phys_p20_cluster-4-right_inflated_notSTS" &
+      ROI_2 == "MD_ROI_13"
+  ) |
+    (
+      ROI_1 == "DOTS_VOE234_phys_p20_cluster-4-left_inflated_notSTS" &
+        ROI_2 == "MD_ROI_3"
+    )
+  ) %>%
+  mutate(hemisphere = case_when(ROI_1 == "DOTS_VOE234_phys_p20_cluster-4-right_inflated_notSTS" ~ "right",
+                                   ROI_1 == "DOTS_VOE234_phys_p20_cluster-4-left_inflated_notSTS" ~ "left"))
+
+names(MD_physics_APC_bilateral)
+names(MD_physics_APC_byhem)
+MD_physics_APC_bilateral <- rbind(MD_physics_APC_bilateral, MD_physics_APC_byhem)
+```
+
+```{r}
+
+overlap_summary <- ggplot(MD_physics_APC_bilateral, aes(hemisphere, overlap_dices_coef)) +
+  geom_boxplot() +
+  geom_point(fun = "mean", stat = "summary", shape = 18, colour = "red", size = 4) +
+  geom_jitter(height = 0, width = .1) +
+  ylab("Dice's Coefficient") +
+  xlab("APC ROI (Bilateral = Confirmatory)") 
+  # geom_text_repel(aes(label = subjID), size = 3) +
+  # ggtitle("Dice's Coefficient between LSMG and RSMG \n to bilateral APC, left APC, and right APC")
+```
+
+```{r}
+overlap_summary
+```
+
+```{r}
+APC_SMG_overlap_results <- MD_physics_APC_bilateral %>%
+  group_by(hemisphere) %>%
+  summarise(mean_DC = mean(overlap_dices_coef),
+            median_DC = median(overlap_dices_coef),
+            range_low = range(overlap_dices_coef)[1],
+            range_high = range(overlap_dices_coef)[2])
+
+MD_physics_APC_bilateral %>%
+  filter(overlap_dices_coef == 0) %>%
+  group_by(hemisphere) %>%
+  summarise(n = n())
+
+
+MD_physics_APC_bilateral %>%
+  filter(overlap_dices_coef != 0,
+         hemisphere == "bilateral") %>%
+  group_by(subjID) 
+```
+
+```{r}
+MD_physics_APC_byhem %>%
+    group_by(hemisphere) %>%
+  summarise(mean_DC = mean(overlap_dices_coef),
+            median_DC = median(overlap_dices_coef),
+            range_low = range(overlap_dices_coef)[1],
+            range_high = range(overlap_dices_coef)[2])
+
+MD_physics_APC_byhem %>%
+  filter(overlap_dices_coef == 0) %>%
+  group_by(hemisphere) %>%
+  summarise(n = n())
+```
+
+```{r}
+# write_rds(APC_SMG_overlap_results, path = here("outputs/univariate_results/APC_SMG_overlap_results.Rds"))
+```
+
+
+
+# Part 6: Effects per task
+
+```{r}
+single_betas_pertask_results <- read_rds(here("outputs/univariate_results/univar_results_top100_singlebetas_pertask.Rds")) 
+  # filter((domain == "both" & extracted_run_number == "all_runs") | (domain != "both" & extracted_run_number == "runs12"))
+```
+
+
+```{r}
+tasks <- c("infer-constraint", "agent-solidity")
+single_betas_pertask_results_focal <- single_betas_pertask_results %>% 
+  filter(focal_region == 1,
+         effect == "event") %>%
+  filter((extracted_run_number == "all_runs" & task %in% tasks) | (extracted_run_number == "runs12" & !task %in% tasks)) %>%
+  select(extracted_run_number, ROI, task, domain, d, BF, B, SE, CI_95_lower, CI_95_upper, star)
+
+single_betas_pertask_results_focal$task <- factor(single_betas_pertask_results_focal$task, levels = c("solidity", "permanence", "goal", "efficiency", "agent-solidity", "infer-constraint"))
+
+single_betas_pertask_results_focal$ROI <- factor(single_betas_pertask_results_focal$ROI, levels = c("supramarginal_L", "supramarginal_R", "superiortemporal_L", "superiortemporal_R", "antParietal_bilateral", "precentral_inferiorfrontal_R", "V1_bilateral", "MT_bilateral"))
+
+
+pertask_b_pertask <- ggplot(single_betas_pertask_results_focal,
+       aes(ROI, B, colour = task, group = task, label = star)) +
+  geom_point() +
+  geom_errorbar(
+    aes(ymin = B - SE, ymax = B + SE, 
+    colour = task),
+    position = position_dodge(width = .9),
+    width = .2
+  ) +  
+  geom_text(size = 4, aes(ROI, B + SE + .02)) +
+  # geom_line() +
+  geom_hline(yintercept = 0) +
+  facet_wrap( ~ task, nrow = 1) +
+ scale_colour_manual(values = c("#25a88b", "#19626a",  "#f24b00", "#deae1e", "#6600cd", "#fba0d0")) +
+  ylab("B and SE") +
+  theme(axis.text.x = element_text(
+    angle = 90,
+    vjust = 0.5,
+    hjust = 1
+  )) +
+  coord_cartesian(ylim = c(-.6, .8))
+
+pertask_b_perROI <- ggplot(single_betas_pertask_results_focal,
+       aes(task, B, colour = task, group = task, label = star)) +
+  geom_point() +
+  geom_errorbar(
+    aes(ymin = B - SE, ymax = B + SE, 
+    colour = task),
+    position = position_dodge(width = .9),
+    width = .2
+  ) +  
+  geom_text(size = 4, aes(task, B + SE + .02)) +
+  # geom_line() +
+  geom_hline(yintercept = 0) +
+  facet_wrap( ~ ROI, nrow = 1) +
+ scale_colour_manual(values = c("#25a88b", "#19626a",  "#f24b00", "#deae1e", "#6600cd", "#fba0d0")) +
+  ylab("B and SE") +
+  theme(axis.text.x = element_text(
+    angle = 90,
+    vjust = 0.5,
+    hjust = 1
+  )) +
+  coord_cartesian(ylim = c(-.6, .8))
+```
+
+```{r, fig.width = 8}
+pertask_b_pertask
+pertask_b_perROI
+```
+
+# Part 7: Region by region univar effect size
+
+This analysis accounts for low level visual confounds.
+
+```{r}
+data_for_modeling <- single_betas %>%
+  filter(event != "fam",
+         top_n_voxels == "100",
+         domain != "psychology-environment") %>%
+  filter(extracted_run_number == "run1" | extracted_run_number == "run2") %>%
+  filter(!str_detect(ROI_name_final, "bilateral"))
+
+data_for_modeling$ROI_name_final <- as.factor(data_for_modeling$ROI_name_final)
+
+ROIs <- sort(unique(data_for_modeling$ROI_name_final))
+
+data_for_modeling$event <- relevel(data_for_modeling$event, ref = "unexp")
+```
+
+```{r, eval = FALSE}
+modelsummaries_init <- data.frame()
+
+for (ROI in ROIs) {
+  curROI <- ROI
+
+  # FIRST COMPUTE EVENT EFFECT SIZES, FOR EACH DOMAIN
+  physics_data <- data_for_modeling %>%
+    filter(ROI_name_final == curROI,
+           domain == "physics") 
+  
+  psychology_data <- data_for_modeling %>%
+    filter(ROI_name_final == curROI,
+           domain == "psychology-action") 
+
+      
+  # had to remove random intercept for runs (convergence))
+  physics_model <- lmer(data = physics_data,
+                formula = meanbeta ~ event + normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf + normalized_mean_rect + normalized_mean_curv + (1|subjectID))
+  
+  psychology_model <- lmer(data = psychology_data,
+                formula = meanbeta ~ event + normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf + normalized_mean_rect + normalized_mean_curv + (1|subjectID))
+  
+  physics_event_effect_size <- lme.dscore(physics_model, physics_data, "lme4") %>%
+    select(d) %>%
+    slice(1)
+  
+  psychology_event_effect_size <- lme.dscore(psychology_model, psychology_data, "lme4") %>%
+    select(d) %>%
+    slice(1)
+  
+  # SECOND COMPUTE DOMAIN EFFECT SIZES, FOR EACH EVENT
+  expected_data <- data_for_modeling %>%
+    filter(ROI_name_final == curROI,
+           event == "exp")
+
+  
+  unexpected_data <- data_for_modeling %>%
+    filter(ROI_name_final == curROI,
+           event == "unexp")
+  # had to remove random intercept for runs (convergence))
+  exp_model <- lmer(data = expected_data,
+                formula = meanbeta ~ domain + normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf + normalized_mean_rect + normalized_mean_curv + (1|subjectID))
+  
+  unexp_model <- lmer(data = unexpected_data,
+                formula = meanbeta ~ domain + normalized_iqr_contrast + normalized_mean_luminance + normalized_mean_motion + normalized_mean_hsf + normalized_mean_rect + normalized_mean_curv + (1|subjectID))
+  
+  exp_domain_effect_size <-
+    lme.dscore(exp_model, expected_data, "lme4") %>%
+    select(d) %>%
+    slice(1)
+  
+  unexp_domain_effect_size <-
+    lme.dscore(unexp_model, unexpected_data, "lme4") %>%
+    select(d) %>%
+    slice(1)
+  
+  if (physics_data$ROI_category[1] == "MD" | physics_data$ROI_category[1] == "early_visual") {
+    ROI_domain <- "general"
+  } else {
+    ROI_domain <- "specific"
+  }
+  
+  modelsummary <-
+    cbind(
+      ROI_domain,
+      physics_data$ROI_category[1],
+      curROI,
+      physics_event_effect_size,
+      psychology_event_effect_size,
+      exp_domain_effect_size,
+      unexp_domain_effect_size
+    ) %>%
+    as.data.frame()
+    
+      modelsummaries_init <-
+        rbind(modelsummaries_init, modelsummary)
+}
+
+```
+
+```{r, eval = FALSE}
+colnames(modelsummaries_init) <-
+  c("ROI_domain",
+    "ROI_category",
+    "ROI",
+    "physics_event_effect_size",
+    "psychology_event_effect_size",
+    "exp_domain_effect_size",
+    "unexp_domain_effect_size"
+  )
+rownames(modelsummaries_init) <- NULL
+
+# write_rds(modelsummaries_init, here("outputs/univariate_results/univar_manyregions_viscontrols_results.Rds"))
+```
+
+```{r}
+univar_manyregions_results <- read_rds( here("outputs/univariate_results/univar_manyregions_viscontrols_results.Rds"))
+```
+
+
+```{r}
+plot1 <- ggplot(univar_manyregions_results, aes(psychology_event_effect_size, physics_event_effect_size)) +
+    geom_hline(yintercept = 0, linetype = 'dotted') +
+  geom_vline(xintercept = 0, linetype = 'dotted') +
+  coord_cartesian(xlim = c(-0.5, 1), ylim = c(-0.5, 1)) +
+  geom_point(aes(colour = ROI_category), size = 3) +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ROI_domain, scales = "free") +
+  scale_colour_manual(values = c("#fb00d3", "#f8bf00", "#4894ff", "#f71d00")) +
+  # coord_cartesian(xlim = c(-1.5,1.5), ylim = c(-1.5,1.5)) +
+  xlab("VOE Effect Size (d), Psychology Events") +
+  ylab("VOE Effect Size (d), Physics Events") +
+  ggtitle(label = "Exp 2 VOE effects for each domain across regions") +
+  geom_text_repel(aes(label = ROI), size = 3) +
+  theme(axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        legend.position = "none")
+
+
+plot2 <- ggplot(univar_manyregions_results, aes(exp_domain_effect_size, unexp_domain_effect_size)) +
+    geom_hline(yintercept = 0, linetype = 'dotted') +
+  geom_vline(xintercept = 0, linetype = 'dotted') +
+  coord_cartesian(xlim = c(-1.2, 1.2), ylim = c(-1.2, 1.2)) +
+  geom_point(aes(colour = ROI_category), size = 3) +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ROI_domain, scales = "free") +
+    scale_colour_manual(values = c("#fb00d3", "#f8bf00", "#4894ff", "#f71d00")) +
+  # coord_cartesian(xlim = c(-1.5,1.5), ylim = c(-1.5,1.5)) +
+  xlab("Domain Effect Size (d), Expected Events") +
+  ylab("Domain Effect Size (d), Unexpected Events") +
+  ggtitle(label = "Exp 2 Domain effects for each event across regions") +
+  geom_text_repel(aes(label = ROI), size = 3) +
+  theme(axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        legend.position = "none")
+
+```
+
+```{r}
+plot1
+plot2
+```
+
+```{r}
+# instead of testing whether the linear relationship between x and y is 0, 
+# we test for independence instead. H0 is that x and y are independent; F_{XY}(x,y) = F_X(x) F_Y(y).
+observed_cors_ind <- univar_manyregions_results %>%
+  group_by(ROI_domain) %>%
+  summarise(
+    cor_domain_within_event =
+      np.cor.test(
+        exp_domain_effect_size,
+        unexp_domain_effect_size,
+        alternative = "two.sided",
+        independent = TRUE
+      )$estimate,
+    
+    p_domain_within_event =
+      np.cor.test(
+        exp_domain_effect_size,
+        unexp_domain_effect_size,
+        alternative = "two.sided",
+        independent = TRUE
+      )$p.value,
+    
+    cor_event_within_domain =
+      np.cor.test(
+        psychology_event_effect_size,
+        physics_event_effect_size,
+        alternative = "two.sided",
+        independent = TRUE
+      )$estimate,
+    
+    p_event_within_domain =
+      np.cor.test(
+        psychology_event_effect_size,
+        physics_event_effect_size,
+        alternative = "two.sided",
+        independent = TRUE
+      )$p.value
+  )
+```
+
+
+```{r}
+observed_cors_ind
+# write_rds(observed_cors_ind, path = here("outputs/univariate_results/study2_univar_manyregions_observed_cor.Rds"))
+```
+
+
+### Bootstrap stats
+```{r}
+
+set.seed(2020)
+## First define a function to work out the difference of corrs:
+diff_corr <- function(data, indices) {
+  data <- data[indices,]
+  cor1 <-
+    np.cor.test(DS_results$exp_domain_effect_size,
+                DS_results$unexp_domain_effect_size,
+                alternative = "two.sided",
+                independent = TRUE,
+                parallel = TRUE)$estimate
+  cor2 <-
+    np.cor.test(
+      data$psychology_event_effect_size,
+      data$physics_event_effect_size,
+      alternative = "two.sided",
+      independent = TRUE,
+      parallel = TRUE)$estimate
+
+    return(cor1 - cor2)
+}
+
+
+```
+
+### Domain specific
+
+```{r}
+DS_results <- univar_manyregions_results %>%
+  filter(ROI_domain == "specific")
+```
+
+```{r}
+doMC::registerDoMC(cores = 2)  # for running in parallel
+
+# Then apply a bootstrap procedure with 4000 draws (uncomment to reproduce):
+# res_boot_DS <- boot(
+#   data = DS_results,
+#   R = 4000,
+#   statistic = diff_corr,
+#   stype = "i"
+# )
+
+# saveRDS(res_boot_DS, here("outputs/univariate_results/study2_univariate_dsregions_4000perms_confirmatory.Rds"))
+
+res_boot_DS <- read_rds(here("outputs/univariate_results/study2_univariate_dsregions_4000perms_confirmatory.Rds"))
+
+## Retrieve the empirical 95% confidence interval:
+ds_results <- append(boot.ci(res_boot_DS, type = "perc", conf = 0.95),boot.pval(res_boot_DS))
+
+# saveRDS(ds_results, here("outputs/univariate_results/study2_univariate_dsregions_summary.Rds"))
+
+```
+
+### Domain general
+```{r}
+DG_results <- univar_manyregions_results %>%
+  filter(ROI_domain == "general")
+```
+
+```{r}
+## Then apply a bootstrap procedure with 4000 draws (uncomment to reproduce):
+# res_boot_DG <- boot(data = DG_results,
+#                  R = 4000,
+#                  statistic = diff_corr,
+#                  stype = "i")
+
+# saveRDS(res_boot_DG, here("outputs/univariate_results/study2_univariate_dgregions_4000perms_confirmatory.Rds"))
+res_boot_DG <- readRDS(here("outputs/univariate_results/study2_univariate_dgregions_4000perms_confirmatory.Rds"))
+
+plot(res_boot_DG)
+
+## Retrieve the empirical 95% confidence interval (adjusted to 90% because of one-tailed prediction):
+
+dg_results <- append(boot.ci(res_boot_DG, type = "perc", conf = 0.95),boot.pval(res_boot_DG))
+# saveRDS(dg_results, here("outputs/univariate_results/study2_univariate_dgregions_summary.Rds"))
+
+```
+
+
+
