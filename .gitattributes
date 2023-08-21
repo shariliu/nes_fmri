@@ -1,0 +1,6 @@
+analysis/*.rds filter=lfs diff=lfs merge=lfs -text
+*.rds filter=lfs diff=lfs merge=lfs -text
+*.csv filter=lfs diff=lfs merge=lfs -text
+*.Rds filter=lfs diff=lfs merge=lfs -text
+*nii.gz filter=lfs diff=lfs merge=lfs -text
+jspsych-6.3.1/ filter=lfs diff=lfs merge=lfs -text
