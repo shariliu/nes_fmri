@@ -13,6 +13,7 @@ exp2/figures/
 *_scratch*
 exp2/cogsci_2023/
 exp2/analysis_scripts/old_snippets.Rmd
+exp2/analysis_scripts/event_scripts/
 exp2/analysis_scripts/vis_statistics/_*/
 exp2/analysis_scripts/vis_statistics/stills/
 exp2/analysis_scripts/vis_statistics/videos/
@@ -33,3 +34,7 @@ writing/
 *_cache/
 *_files/
 *.zip
+*.mat
+*_exp.csv
+*_fam.csv
+*_unexp.csv
