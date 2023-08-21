@@ -48,16 +48,16 @@ In `4_Data_Codebooks`, we generate codebooks for all original input data.
 Throughout these analyses, the domain label for `psychology-action` events is `psychology` and the domain label for `psychology-environment` events is `both` - since the events cross domain boundaries. This differs from the paper which calls the three domains: `physics` `psychology-action` `psychology-environment`.
 
 ## Large files
-There are some files, that are too large and/or unwieldy to share on Github. Below we indicate that paths of these files, and where you can find them on OSF. To run the experiment and analysis scripts, these files should be slotted back into the appropriate directory.
+There are some files, that are too large and/or unwieldy to share on Github. Below we indicate that paths of these files, located at https://osf.io/sa7jy/. To run the experiment and analysis scripts, these files should be slotted back into the appropriate directory.
 
-- Experiment 1 VOE stimuli `exp1/experiment_scripts/stim/`
-- Experiment 2 VOE stimuli `exp2/experiment_scripts/VOE/voe_stimuli`
-- Experiments 1-2 DOTS stimuli `exp*/experiment_scripts/DOTSloc/fischer_videos`
-- Experiment 1 input data to analysis `exp1/analysis_scripts/input_data`
-- Experiment 2 input data to analysis `exp2/analysis_scripts/input_data`
+- Experiment 1 VOE stimuli (`exp1_voe_stimuli.zip`) - `exp1/experiment_scripts/stim/`
+- Experiment 2 VOE stimuli (`exp2_voe_stimuli.zip`) - `exp2/experiment_scripts/VOE/voe_stimuli`
+- Experiments 1-2 DOTS stimuli (`dotsloc_stimuli.zip`) - `exp*/experiment_scripts/DOTSloc/fischer_videos`
+- Experiment 1 input data to analysis (`exp1_input_data.zip`) - `exp1/analysis_scripts/input_data`
+- Experiment 2 input data to analysis (`exp2_input_data.zip`) -`exp2/analysis_scripts/input_data`
 
 ## Brain images and parcels
-ROI parcels for this project can be found at https://osf.io/tyh5b. De-faced brain images for a subset of this dataset will be uploaded to OpenNeuro upon publication of this paper.
+ROI parcels for this project can be found at https://osf.io/sa7jy/ (`roi_parcels.zip`). De-faced brain images for a subset of this dataset will be uploaded to OpenNeuro upon publication of this paper.
 
 ```
 .
