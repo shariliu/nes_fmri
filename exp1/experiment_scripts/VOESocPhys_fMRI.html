@@ -1,0 +1,504 @@
+<!-- Task Documentation: Surprising outcomes in intuitive physics and psychology -->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>My experiment</title>
+    <script src="jspsych-6.3.1/jspsych.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-video-keyboard-response.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-image-keyboard-response.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-preload.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-instructions.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-survey-text.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-audio-button-response.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-audio-keyboard-response.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-audio-slider-response.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-survey-likert.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-fullscreen.js"></script>
+
+    <link href="jspsych-6.3.1/css/jspsych.css" rel="stylesheet" type="text/css">
+    <link href="jspsych-6.3.1/css/extra.css" rel="stylesheet" type="text/css">
+
+    <script src="utils.js"></script>
+    <script src="playmusic.js"></script>
+    <script src="voe_trials.js"></script>
+    <script src="voe_images.js"></script>
+
+
+</head>
+
+<body>
+    <audio>
+        <source src="stim/Edoy - Waiting.mp3" type="audio/mpeg" autoplay>
+    </audio>
+</body>
+
+<script>
+    // STIPULATE WHICH CONDITION CURRENT EXPT SESSION WILL BE
+
+    const subj_ID = "s020";
+
+    const run_number = 4 // 1 2 3 or 4
+    const block_order = 'C'; // run condition: A B C or D
+
+    // order of runs for each counterblanacing
+    // 1 -> A B C D
+    // 2 -> B D A C
+    // 3 -> C A D B
+    // 4 -> D C B A
+
+    // Scanner button box
+    // blue 1
+    // yellow 2
+    // green 3
+    // red 4
+
+    // CONSTANTS - none of these should be touched
+    var exptName = "VOESocPhys";
+    var ISI = 250; // for post_trial_gap (NOT included in calculations of time_elapsed!)
+    var scanScreenWidth = 1024; // specific to T1 at McGovern
+    var scanScreenHeight = 768; // specific to T1 at McGovern
+    var vidwidth = screen.width * .90;
+    var pauseVideoTime = 5030; // what frame to freeze on
+    var totalVideoTime = 6000 // total length of video including freeze frame;
+    var Keys = {
+        PAUSE: 'p',
+        RESUME: 'r',
+        QUIT: 'q'
+    };
+
+    // ATTENTION GETTING VIDEOS - not used for fMRI
+    // var attentionVids = ['stim/attention/diamond.mp4']
+
+    // var attention = {
+    //     type: 'video-keyboard-response',
+    //     stimulus: ['stim/attention/diamond.mp4'],
+    //     controls: false,
+    //     trial_duration: 3000,
+    //     width: vidwidth,
+    //     response_ends_trial: false,
+    //     data: {
+    //         trialtype: 'attention'
+    //     },
+    //     save_trial_parameters: {
+    //         trial_duration: true,
+    //     }
+    // }
+
+    // FIXATIONS
+
+    // fixation assets for this expt
+    const regular_fixation = '<div style="font-size:120px;">+</div>'
+    const button_fixation = '<div style="font-size:120px;">x</div>'
+    var prompt_fixation = [jsPsych.timelineVariable('path')]
+    var fixations = [regular_fixation, button_fixation]
+    var possible_fix_durations = [3000, 5000, 7000]
+
+    // choose biased sample (regular fix appears more often than attention-check fixation)
+    function chooseFixation() {
+        var chosen = jsPsych.randomization.sampleWithoutReplacement(fixations, 1, [2, 1]).pop()
+        return chosen;
+    }
+
+    // get a random fixation time in between two numbers (overkill, not used for now)
+    function getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    // get a random fixation time out of a set of numbers (currently in use for jittering)
+    function current_fixation_len() {
+        var chosen = jsPsych.randomization.sampleWithoutReplacement(possible_fix_durations, 1).pop()
+        return chosen;
+    }
+
+    var fixation = {
+        type: 'html-keyboard-response',
+        stimulus: chooseFixation,
+        choices: ['1', 'p', 'r', 'q'],
+        response_ends_trial: false,
+        trial_duration: current_fixation_len,
+        data: {
+            trialtype: 'fixation'
+        },
+        save_trial_parameters: {
+            trial_duration: true,
+        }
+    }
+
+    // MAIN EXPERIMENTAL TASK TRIALS
+
+    // functions for returning all trials within a task
+    var efficiency = voe_trials.filter(function (x) {
+        return x.task == "efficiency"
+    });
+    var goal = voe_trials.filter(function (x) {
+        return x.task == "goals"
+    });
+    var solidity = voe_trials.filter(function (x) {
+        return x.task == "solidity"
+    });
+    var support = voe_trials.filter(function (x) {
+        return x.task == "support"
+    });
+
+    // Latin Square design of 4 tasks, such that each task appears once in positions 1234,
+    // and that half the time two psych/physics tasks are next to each other
+    var block1 = [].concat.apply([],
+        [jsPsych.randomization.sampleWithoutReplacement(solidity, 1),
+            jsPsych.randomization.sampleWithoutReplacement(support, 1),
+            jsPsych.randomization.sampleWithoutReplacement(goal, 1),
+            jsPsych.randomization.sampleWithoutReplacement(efficiency, 1)
+        ])
+
+    var block2 = [].concat.apply([],
+        [jsPsych.randomization.sampleWithoutReplacement(goal, 1),
+            jsPsych.randomization.sampleWithoutReplacement(solidity, 1),
+            jsPsych.randomization.sampleWithoutReplacement(efficiency, 1),
+            jsPsych.randomization.sampleWithoutReplacement(support, 1)
+        ])
+
+    var block3 = [].concat.apply([],
+        [jsPsych.randomization.sampleWithoutReplacement(efficiency, 1),
+            jsPsych.randomization.sampleWithoutReplacement(goal, 1),
+            jsPsych.randomization.sampleWithoutReplacement(support, 1),
+            jsPsych.randomization.sampleWithoutReplacement(solidity, 1)
+        ])
+
+    var block4 = [].concat.apply([],
+        [jsPsych.randomization.sampleWithoutReplacement(support, 1),
+            jsPsych.randomization.sampleWithoutReplacement(efficiency, 1),
+            jsPsych.randomization.sampleWithoutReplacement(solidity, 1),
+            jsPsych.randomization.sampleWithoutReplacement(goal, 1)
+        ])
+
+    // each run will consist of 2 of these blocks
+    // we chose a small set of possible orders with the constraint
+    // that no two tasks are ever next to each other within blocks
+    var runA = block1.concat(block2);
+    var runB = block2.concat(block3);
+    var runC = block3.concat(block4);
+    var runD = block4.concat(block1);
+
+    // fam and test event structure
+    var fam_trial = {
+        type: 'video-keyboard-response',
+        timeline: [{ //two repetitions of each video
+                stimulus: [jsPsych.timelineVariable('fam')]
+            },
+            {
+                stimulus: [jsPsych.timelineVariable('fam')]
+            }
+        ],
+        controls: false,
+        trial_ends_after_video: false,
+        response_ends_trial: false,
+        choices: ['p', 'r', 'q'],
+        width: vidwidth,
+        post_trial_gap: ISI,
+        stop: pauseVideoTime,
+        trial_duration: totalVideoTime,
+        data: {
+            trialtype: 'fam',
+            task: jsPsych.timelineVariable('task'),
+            flipped: jsPsych.timelineVariable('flipped'),
+            domain: jsPsych.timelineVariable('domain')
+        }
+    }
+
+    var test1_trial = {
+        type: 'video-keyboard-response',
+        timeline: [{
+                stimulus: [jsPsych.timelineVariable('test1')]
+            },
+            {
+                stimulus: [jsPsych.timelineVariable('test1')]
+            }
+        ],
+        controls: false,
+        trial_ends_after_video: false,
+        response_ends_trial: false,
+        choices: ['p', 'r', 'q'],
+        width: vidwidth,
+        post_trial_gap: ISI,
+        stop: pauseVideoTime,
+        trial_duration: totalVideoTime,
+        data: {
+            trialtype: 'test1',
+            task: jsPsych.timelineVariable('task'),
+            flipped: jsPsych.timelineVariable('flipped'),
+            domain: jsPsych.timelineVariable('domain'),
+        }
+    }
+
+    var test2_trial = {
+        type: 'video-keyboard-response',
+        timeline: [{
+                stimulus: [jsPsych.timelineVariable('test2')]
+            },
+            {
+                stimulus: [jsPsych.timelineVariable('test2')]
+            }
+        ],
+        controls: false,
+        trial_ends_after_video: false,
+        response_ends_trial: false,
+        choices: ['p', 'r', 'q'],
+        width: vidwidth,
+        post_trial_gap: ISI,
+        stop: pauseVideoTime,
+        trial_duration: totalVideoTime,
+        data: {
+            trialtype: 'test2',
+            task: jsPsych.timelineVariable('task'),
+            flipped: jsPsych.timelineVariable('flipped'),
+            domain: jsPsych.timelineVariable('domain')
+        }
+    }
+
+    // not currently used - new attention check
+    // var post_movie_prompt = {
+    //     type: 'image-keyboard-response',
+    //     stimulus: [jsPsych.timelineVariable('path')],
+    //     controls: false,
+    //     stimulus_height: 500,
+    //     choices: jsPsych.ALL_KEYS,
+    //     stimulus_duration: 2000,
+    //     trial_duration: 2000,
+    //     response_ends_trial: false,
+    //     timeline_variables: voe_images,
+    //     save_trial_parameters: {
+    //         trial_duration: true,
+    //         stimulus: true
+    //     },
+    //     data: {
+    //         trialtype: 'prompt',
+    //         task: jsPsych.timelineVariable('domain'),
+    //         img_name: jsPsych.timelineVariable('name')
+    //     }
+    // }
+
+
+    // put together procedure for running trials
+    function makeTrials(runID) {
+        var trialStructure = {
+            timeline: [
+                fixation,
+                fam_trial,
+                fixation,
+                test1_trial,
+                fixation,
+                test2_trial
+            ],
+            timeline_variables: runID,
+            save_trial_parameters: {
+                trial_duration: true,
+                stimulus: true,
+                post_trial_gap: true
+            },
+            on_finish: function (data) {
+
+                // calculate trial starts (time_elapsed does not include post_trial_gap)
+                data.trial_start = data.time_elapsed - data.trial_duration;
+
+                // not currently used - image prompt attention check
+                // if (data.trialtype = 'prompt') {
+                //     var lasttrial = jsPsych.data.getLastTrialData().select('task').values;
+                //     if (data.source == lasttrial) {
+                //         if (jsPsych.pluginAPI.compareKeys(data.response, '1')) {
+                //             data.correct = true;
+                //     } else if (jsPsych.pluginAPI.compareKeys(data.response, '2')) {
+                //         data.correct = false;
+                //     }
+                //  } else if (data.source != lasttrial) {
+                //     if (jsPsych.pluginAPI.compareKeys(data.response, '1')) {
+                //             data.correct = false;
+                //     } else if (jsPsych.pluginAPI.compareKeys(data.response, '2')) {
+                //         data.correct = true;
+                //     }
+                // }
+
+                // collect information about attention checks
+                if (data.stimulus == regular_fixation) {
+                    if (jsPsych.pluginAPI.compareKeys(data.response, '1')) {
+                        data.correct = false;
+                    }
+                    if (jsPsych.pluginAPI.compareKeys(data.response, null)) {
+                        data.correct = true;
+                    };
+                } else if (data.stimulus == button_fixation) {
+                    if (jsPsych.pluginAPI.compareKeys(data.response, null)) {
+                        data.correct = false;
+                    }
+                    if (jsPsych.pluginAPI.compareKeys(data.response, '1')) {
+                        data.correct = true;
+                    }
+                }
+            }
+        }
+        return trialStructure;
+    }
+
+    // put together a run 
+    function makeRun(runNumber, runCondition) {
+        var run = {
+            timeline: [welcome, scannerTrigger, makeTrials(runCondition)],
+            data: {
+                runNumber: runNumber
+            }
+        }
+        return run;
+    };
+
+
+    // BEGINNING AND END OF EVERY RUN
+    var welcome = {
+        type: 'instructions',
+        pages: [
+            'Note to Shari: Click into Firefox',
+            'VOESocPhys, ' + subj_ID + ', block' + block_order + ', run ' + run_number + ' of 4',
+            'Please hold your head still ' +
+            'and pay attention to the videos.' +
+            '<p>Press the button (index finger) whenever you see ' +
+            'the letter "x" instead of a fixation cross "+".</p>' +
+            '<p>Ready to begin?</p>'
+        ],
+        key_forward: 'Enter',
+        on_finish: function (data) {
+            data.trial_start = data.time_elapsed - data.trial_duration;
+            jsPsych.data.addProperties({
+                experimentName: exptName,
+                sessionDate: new Date().toLocaleDateString(),
+                sessionTime: new Date().toLocaleTimeString(),
+                participant: subj_ID,
+                block_order: block_order,
+                run_number: run_number
+            });
+        }
+    };
+
+    var post_run_rest = {
+        type: 'html-keyboard-response',
+        stimulus: `<div style="width:${vidwidth}px;height:${vidwidth*.66}px; background-color:#000;"></div>`,
+        choices: ['Enter'],
+        response_ends_trial: true,
+        data: {
+            trialtype: 'post_run_rest'
+        },
+        save_trial_parameters: {
+            trial_duration: true,
+            post_trial_gap: true
+        },
+        on_finish: function (data) {
+            // calculate trial starts (time_elapsed does not include post_trial_gap)
+            data.trial_start = data.time_elapsed - data.trial_duration;
+        }
+    }
+
+    var all_done = {
+        type: 'instructions',
+        pages: ['End of: VOESocPhys, ' + subj_ID + ', block' + block_order + ', run ' + run_number +
+            ' of 4.'
+        ],
+        key_forward: 'Enter',
+        data: {
+            trialtype: 'all_done'
+        },
+        on_finish: function (data) {
+            var trials = jsPsych.data.get().filter({
+                trialtype: 'fixation'
+            });
+            var correct_trials = trials.filter({
+                correct: true
+            });
+            jsPsych.data.addProperties({
+                accuracy: Math.round(correct_trials.count() / trials.count() * 100)
+            });
+            jsPsych.data.get().localSave('csv', exptName + '_' + subj_ID + "_run" + run_number +
+                "_blockorder" + block_order + '.csv');
+        }
+    }
+
+    // likert rating 
+    var how_surprising = {
+        type: 'survey-likert',
+        questions: [{
+            prompt: "How surprising were the videos you saw in this last block of the experiment?",
+            labels: [
+                "1 <br> Not at all surprising",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7 <br> Extremely surprising"
+            ]
+        }],
+        data: {
+            trialtype: "how_surprising"
+        },
+        on_finish: function (data) {
+            // calculate trial starts (time_elapsed does not include post_trial_gap)
+            data.trial_start = data.time_elapsed - data.trial_duration;
+        }
+    }
+
+    // SCANNER TRIGGER
+    var scannerTrigger = {
+        type: 'html-keyboard-response',
+        stimulus: 'Videos will begin shortly!',
+        choices: ['+', 'Add'], // scanner sends a + as keyboard input, which triggers a run to begin
+        data: {
+            trialtype: 'blockstart'
+        },
+        on_finish: function (data) {
+            data.trial_start = data.time_elapsed - data.trial_duration;
+            data.blockstart_time = data.time_elapsed;
+        }
+    };
+
+    // TIMELINE
+    var timeline = [];
+
+    timeline.push({
+        type: 'fullscreen',
+        fullscreen_mode: true
+    });
+
+    if (block_order == 'A') {
+        timeline.push(makeRun(run_number, runA));
+    } else if (block_order == 'B') {
+        timeline.push(makeRun(run_number, runB));
+    } else if (block_order == 'C') {
+        timeline.push(makeRun(run_number, runC));
+    } else if (block_order == 'D') {
+        timeline.push(makeRun(run_number, runD));
+    }
+
+    console.log('timeline', timeline)
+    console.log('fixation', fixation)
+    console.log('fam_trial', fam_trial)
+    console.log('test1_trial', test1_trial)
+    console.log('test2_trial', test2_trial)
+
+    timeline.push(post_run_rest);
+    timeline.push(how_surprising);
+    timeline.push(all_done);
+
+
+
+    jsPsych.init({
+        timeline: timeline,
+        use_webaudio: false,
+        override_safe_mode: true,
+        on_finish: function (data) {
+            jsPsych.data.displayData();
+            jsPsych.data.get().localSave('csv', exptName + '_' + subj_ID + "_run" + run_number +
+                "_blockorder" + block_order + '_copy2.csv');
+        }
+    })
+</script>
+
+</html>
