@@ -2392,7 +2392,7 @@ pertask_b_perROI
 
 # Part 7: Region by region univar effect size
 
-This analysis accounts for low level visual confounds.
+This analysis tests for the tolerance of the primary VOE effects to low level visual confounds.
 
 ```{r}
 data_for_modeling <- single_betas %>%
@@ -2680,6 +2680,120 @@ dg_results <- append(boot.ci(res_boot_DG, type = "perc", conf = 0.95),boot.pval(
 # saveRDS(dg_results, here("outputs/univariate_results/study2_univariate_dgregions_summary.Rds"))
 
 ```
+
+# Part 8: Early visual regions' detection of visual novelty
+
+
+```{r}
+V1_bilat_famvstest <- focal_data %>% 
+  filter(ROI_name_final == "V1_bilateral",
+         domain != "both",
+         top_n_voxels == 100) %>%
+  filter(str_length(extracted_run_number) == 4) %>% # restrict analysis to same as confirm
+  mutate(event_famtest = case_when(event == "fam" ~ "fam",
+         TRUE ~ "test")) # compare fam to test
+
+MT_bilat_famvstest <- focal_data %>% 
+  filter(ROI_name_final == "MT_bilateral",
+         domain != "both",
+         top_n_voxels == 100) %>%
+  filter(str_length(extracted_run_number) == 4) %>% # restrict analysis to same as confirm
+  mutate(event_famtest = case_when(event == "fam" ~ "fam",
+         TRUE ~ "test")) # compare fam to test
+
+nonvis_famvstest <- focal_data %>% 
+  filter(ROI_category != "early_visual",
+         domain != "both",
+         top_n_voxels == 100) %>%
+  filter(str_length(extracted_run_number) == 4) %>% # restrict analysis to same as confirm analysis to same as confirm
+  mutate(event_famtest = case_when(event == "fam" ~ "fam",
+         TRUE ~ "test")) # compare fam to test
+
+focalregions_famvstest <- rbind(V1_bilat_famvstest, MT_bilat_famvstest, nonvis_famvstest) 
+```
+
+```{r}
+ggplot(focalregions_famvstest,
+       aes(event_famtest, meanbeta, fill = ROI_category)) +
+  geom_boxplot() +
+  facet_wrap(~ ROI_category,
+  nrow = 1,
+  scales = "free") +
+  scale_fill_manual(values = c("#fb00d3", "#f8bf00",  "#4894ff", "#f71d00")) +
+    stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", colour = "white", width = .2) +
+  ylab("Average amplitude of response") +
+  xlab("Event Type")
+
+```
+
+
+```{r}
+V1_visnovelty_model <- lmer(data = V1_bilat_famvstest, formula = meanbeta ~ event_famtest + (1 | subjectID))
+
+summary(V1_visnovelty_model)
+plot(allEffects(V1_visnovelty_model))
+
+check_model(V1_visnovelty_model)
+
+MT_visnovelty_model <- lmer(data = MT_bilat_famvstest, formula = meanbeta ~ event_famtest + (1 | subjectID))
+
+summary(MT_visnovelty_model)
+check_model(V1_visnovelty_model)
+
+V1_visnovelty_model_results <- cbind(gen.m(V1_visnovelty_model), gen.ci(V1_visnovelty_model)[3:4,])
+
+MT_visnovelty_model_results <- cbind(gen.m(MT_visnovelty_model), gen.ci(MT_visnovelty_model)[3:4,])
+```
+
+```{r}
+knitr::kable(V1_visnovelty_model_results)
+
+knitr::kable(MT_visnovelty_model_results)
+
+```
+
+```{r}
+# write_rds(V1_visnovelty_model_results, path = here("outputs/univariate_results/V1_visnovelty_results.Rds"))
+
+# write_rds(MT_visnovelty_model_results, path = here("outputs/univariate_results/MT_visnovelty_results.Rds"))
+
+```
+
+```{r}
+allregions_visnovelty_model <- lmer(data = focalregions_famvstest,
+              formula = meanbeta ~ ROI_category * event_famtest + (1 | subjectID) + (1|ROI_name_final))
+summary(allregions_visnovelty_model)
+
+plot(allEffects(allregions_visnovelty_model))
+
+allregions_visnovelty_model_simpler <- lmer(data = focalregions_famvstest,
+              formula = meanbeta ~ ROI_category + event_famtest + (1 | subjectID) + (1|ROI_name_final))
+
+anova(allregions_visnovelty_model_simpler, allregions_visnovelty_model)
+
+results <- lsmeans(allregions_visnovelty_model, pairwise ~ event_famtest | ROI_category, pbkrtest.limit = 6096)$contrasts %>% as.data.frame()
+results
+```
+
+```{r}
+allregions_visnovelty_model_results <- cbind(gen.m(allregions_visnovelty_model), gen.ci(allregions_visnovelty_model)[3:10,])
+
+```
+
+```{r}
+knitr::kable(allregions_visnovelty_model_results)
+
+```
+
+```{r}
+# write_rds(allregions_visnovelty_model_results, path = here("outputs/univariate_results/allfocalregions_visnovelty_modelsummary.Rds"))
+# write_rds(results, path = here("outputs/univariate_results/allfocalregions_visnovelty_results_per_ROI_cat.Rds"))
+```
+
+
+
+
+
 
 
 
