@@ -204,6 +204,17 @@ exp2_modelsummary_singlebetas <- read_rds(path = here("../../exp2/analysis_scrip
 exp2_modelsummary_singlebetas_visualstats <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/univar_results_top100_singlebetas_psych_phys_visstats.Rds"))
 ```
 
+
+```{r}
+exp2_visnovelty_allregions <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/allfocalregions_visnovelty_modelsummary.Rds"))
+
+exp2_visnovelty_allregions_perROI <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/allfocalregions_visnovelty_results_per_ROI_cat.Rds"))
+
+exp2_visnovelty_V1 <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/V1_visnovelty_results.Rds"))
+
+exp2_visnovelty_MT <- read_rds(path = here("../../exp2/analysis_scripts/outputs/univariate_results/MT_visnovelty_results.Rds"))
+```
+
 # Results from Main Text
 ## Univariate results 
 
@@ -290,7 +301,8 @@ exp2_modelsummary_habituation_byrun
 
 # Supplemental Results
 
-## 4. Additional univariate results 
+
+## Section 6. Additional univariate results 
 ### Psych-action and physics events, non-focal regions {.tabset}
 
 #### Event effects
@@ -409,6 +421,15 @@ Experiment 2
 DT::datatable(exp2_modelsummaries_allregions %>% filter(top_n_voxels == 100, extracted_run_number == "runs12", ROI %in% old_ROIs), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
 ```
 
+### Responses to visual novelty in early visual regions
+As one benchmark of whether our fROI analysis could detect visual novelty in our stimuli we compared the response to all familiarization events (more visually new) > all test events (less visually new) in our early visual ROIs from Experiment 2. We found stronger responses to more novel stimuli, in both bilateral V1 (B = `r exp2_visnovelty_V1 %>% slice(2) %>% select(B) %>% as.numeric()`, [`r exp2_visnovelty_V1 %>% slice(2) %>% select(CI_95_lower) %>% as.numeric()`, `r exp2_visnovelty_V1 %>% slice(2) %>% select(CI_95_upper) %>% as.numeric()`], p = `r exp2_visnovelty_V1 %>% slice(2) %>% select(p) %>% as.numeric()`, two-tailed) and bilateral MT (B = `r exp2_visnovelty_MT %>% slice(2) %>% select(B) %>% as.numeric()`, [`r exp2_visnovelty_MT %>% slice(2) %>% select(CI_95_lower) %>% as.numeric()`, `r exp2_visnovelty_MT %>% slice(2) %>% select(CI_95_upper) %>% as.numeric()`], p = `r exp2_visnovelty_MT %>% slice(2) %>% select(p) %>% as.numeric()`, two-tailed). We observed this effect, even though each new familiarization event is different from the test events in different ways in terms of the visual details. This confirms that it is possible to measure univariate responses broad fROIs to visual novelty defined over varying features across trials.
+
+We also found that the early visual ROIs were the only focal regions to show greater responses to familiarization than test events. We found an ROI category by event interaction (likelihood ratio test, p < .001), such that the physics, psychology, and multiple demand ROIs all responded more to the conceptually relevant test events, more so than the visually new familiarization events (physics ROIs: `r  report_contrasts(exp2_visnovelty_allregions_perROI %>% filter(ROI_category == "physics"), 3, 2)`; psychology ROIs:  `r  report_contrasts(exp2_visnovelty_allregions_perROI %>% filter(ROI_category == "psychology"), 3, 2)`;  MD ROIs: `r  report_contrasts(exp2_visnovelty_allregions_perROI %>% filter(ROI_category == "MD"), 3, 2)`), in contrast to the early visual ROIs, which responded more to the visually novel familiarization events (`r  report_contrasts(exp2_visnovelty_allregions_perROI %>% filter(ROI_category == "early_visual"), 3, 2)`). These results show that it is possible to measure a visual novelty effect in these early visual ROIs, which makes it more plausible that we could have measured a VOE effect if one existed in these regions. 
+
+```{r}
+DT::datatable(exp2_visnovelty_allregions_perROI, options = list(scrollX = TRUE)) %>% formatRound(columns = c(3:7), digits = 3)
+```
+
 ### Psychology-Environment Events (all regions)
 
 Unlike the psych-action and physics events, when we applied the same check to the data, we did not find that the VOE effect decreased over runs (run 1: `r report_contrasts(exp2_psych_env_habituation_perrun %>% filter(extracted_run_number == "run1"), 3, 2)`), this effect was absent in the other runs (run 2: `r report_contrasts(exp2_psych_env_habituation_perrun %>% filter(extracted_run_number == "run2"), 3, 2)`; run 3: `r report_contrasts(exp2_psych_env_habituation_perrun %>% filter(extracted_run_number == "run3"), 3, 2)`; run 4: `r report_contrasts(exp2_psych_env_habituation_perrun %>% filter(extracted_run_number == "run4"), 3, 2)`).  Thus in the main text we have decided to show the results from both runs 1-2 (matching the other events), and runs 1-4. 
@@ -436,7 +457,7 @@ DT::datatable(exp2_psych_env_modelsummaries_allregions %>%   filter(top_n_voxels
 filter(extracted_run_number == "all_runs" | extracted_run_number == "runs12") %>% filter(effect == "event"), options = list(scrollX = TRUE)) %>% formatRound(columns = c(7:15), digits = 3)
 ```
 
-## 5. Supplemental MVPA results {.tabset}
+## Section 7. Supplemental MVPA results {.tabset}
 
 ### Robust univariate, and absent multivariate, event effects
 In Experiment 2, both APC and RFC showed a univariate main effect of event. Our plan was to test for multivariate information about events that generalized across domains. However, neither of these regions contained multivariate information about event within domains (physics: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "antParietal_bilateral", category == "event_within_domain", same_domain == "physics"), 3)`; psychology: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "antParietal_bilateral", category == "event_within_domain", same_domain == "psychology"), 3)`). Thus, it did not make sense to us to strongly interpret the null MVPA effect across domains (bilateral APC: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "antParietal_bilateral", category == "event_across_domain"), 3)`; right frontal cortex: `r report_MVPA(exp2_MVPA_results_allregions %>% filter(ROI_name_final == "precentral_inferiorfrontal_R", category == "event_across_domain"), 3)`). 
