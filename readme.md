@@ -11,9 +11,13 @@ This sub-dir contains all the code and ROI data required to clean, process, and 
 HTML outputs for each file are available at:
 
 https://rpubs.com/shariliu/nes_exp1_univariate
+
 https://rpubs.com/shariliu/nes_exp2_univariate
+
 https://rpubs.com/shariliu/nes_exp1_multivariate
+
 https://rpubs.com/shariliu/nes_exp1_multivariate
+
 https://rpubs.com/shariliu/nes_results
 
 The `input_data/` dir contains basic information about all the subjects who participated `study_subjects.csv`, all the ROI parcels `manyregions_info.csv`, and the ROI analysis outputs. 
@@ -43,7 +47,9 @@ In `2_Multivariate.Rmd`, we conduct both confirmatory and exploratory multivaria
 
 In `3_ReportFindings.Rmd` (only in exp 1 - but reports findings from both experiments), we read in data from `outputs/` and report them in APA format. 
 
-In `4_Data_Codebooks`, we generate codebooks for all original input data.
+In `4_Data_Codebooks.Rmd`, we generate codebooks for all original input data.
+
+In `5_Validate_Localizers.Rmd` (only for exp 2), we validate the localizer tasks by measuring the reliability of the responses between runs using a leave-one-run-out analysis.
 
 Throughout these analyses, the domain label for `psychology-action` events is `psychology` and the domain label for `psychology-environment` events is `both` - since the events cross domain boundaries. This differs from the paper which calls the three domains: `physics` `psychology-action` `psychology-environment`.
 
