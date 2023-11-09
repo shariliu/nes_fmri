@@ -1,0 +1,155 @@
+---
+title: "5_Validate_Localizers"
+author: "Shari Liu"
+date: "2023-10-26"
+output: html_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 1, digits = 3)
+library(pacman)
+pacman::p_load(tidyverse,
+               patchwork,
+               papaja,
+               ggforce,
+               conflicted,
+               here,
+               cowplot)
+
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("rename", "dplyr")
+conflict_prefer("mutate", "dplyr")
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("lmer", "lmerTest")
+conflict_prefer("here", "here")
+
+source(here("helper_funs.R"))
+
+theme_set(theme_cowplot(10))
+
+sessionInfo()
+```
+
+
+## Overview
+As requested by a reviewer, here we conducted a validation of our three localizer tasks in our focal regions.
+
+The logic of this analysis is the following:
+
+- For all subjects that have two runs of data, we used a leave one run out approach to check whether the ROIs reliably respond to the same contrasts they were selected for in held out data
+- We first used run 1 to identify the ROI and run 2 to extract the responses using the same contrast.
+- We then used run 2 to identify the ROI and run 1 to extract the responses using the same contrast.
+
+Here we will average these responses across folds per subject per ROI, and then plot the responses.
+
+```{r}
+localizer_data_init <-
+  read.csv(here("input_data/localizer_validation_outputs_Nov07_2023.csv"), header = TRUE) %>%
+  rename(ROI_name = roi) 
+
+region_info <- read.csv(here("input_data/manyregions_info.csv")) %>%
+  mutate(ROI_name = paste0(ROI_name, "_MNI152Lin2009cAsym_res-02", sep = ""))
+
+localizer_data <- left_join(localizer_data_init, region_info)
+
+localizer_data$ROI_category <- factor(localizer_data$ROI_category, levels=c('physics', 'psychology', 'MD', 'early_visual'))
+
+```
+
+```{r}
+localizer_data_avg_fold <- localizer_data %>%
+  group_by(subjectID, ROI_name_final, ROI_category, task, extraction_contrast) %>%
+  summarise(average_cope_across_folds = mean(mean_topvoxels_extracted_cope))
+  
+```
+
+```{r}
+plot1 <- ggplot(localizer_data_avg_fold, aes(ROI_name_final, average_cope_across_folds, fill = ROI_category)) + 
+  geom_boxplot() +
+  geom_point(alpha = 0.2) +
+  geom_hline(yintercept = 0) + 
+  stat_summary(geom = "pointrange", fun.data = "mean_cl_boot", colour = "white") +
+  facet_wrap(~ROI_category, scales = "free", nrow = 4) +
+  scale_fill_manual(values = c("#4894ff", "#f71d00", "#f8bf00", "#fb00d3")) +
+  ylab("Cope from held out data") +
+  theme(legend.position = "none")
+```
+
+```{r}
+ggplot(localizer_data_avg_fold, aes( average_cope_across_folds, fill = ROI_category)) + 
+  geom_histogram() +
+  facet_wrap(~ROI_category, scales = "free", nrow = 1) +
+  scale_fill_manual(values = c("#4894ff", "#f71d00", "#f8bf00", "#fb00d3")) +
+  # ylab("Cope from held out data") +
+  theme(legend.position = "none")
+```
+
+
+```{r}
+localizer_data_byrun <- localizer_data %>%
+  select(subjectID, task, ROI_category, ROI_name_final, selection_contrast, extracted_run_number, mean_topvoxels_extracted_cope) %>%
+  pivot_wider(id_cols = c(subjectID, task, ROI_category, ROI_name_final, selection_contrast), names_from = "extracted_run_number", values_from = "mean_topvoxels_extracted_cope", names_prefix = "extracted_cope_") 
+```
+
+
+```{r}
+reliability <- localizer_data_byrun %>%
+  group_by(ROI_name_final) %>%
+  summarise(r = cor.test(extracted_cope_run1, extracted_cope_run2, method = "pearson", paired = TRUE, alterative = "greater")$estimate,
+            r_p = cor.test(extracted_cope_run1, extracted_cope_run2, method = "pearson", paired = TRUE, alterative = "greater")$p.value,
+            tau = cor.test(extracted_cope_run1, extracted_cope_run2, method = "kendall", paired = TRUE, alterative = "greater")$estimate,
+            tau_p = cor.test(extracted_cope_run1, extracted_cope_run2, method = "kendall", paired = TRUE, alterative = "greater")$p.value) %>%
+ mutate(star = as.factor(case_when(tau_p< .001 ~ "***",
+                        tau_p < .01 ~ "**",
+                        tau_p < .05 ~ "*",
+                        tau_p < .1 ~ "~",
+                        TRUE ~ " "))) %>%
+  mutate(tau_spearman_brown = (2*tau)/(1+tau))
+```
+
+```{r}
+plot2<- ggplot(
+  localizer_data_byrun,
+  aes(extracted_cope_run1, extracted_cope_run2, colour = ROI_category)
+) +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  coord_cartesian(xlim = c(-1, 20), ylim = c(-1, 20)) +
+  scale_colour_manual(values = c("#4894ff", "#f71d00", "#f8bf00", "#fb00d3")) +
+  facet_wrap( ~ factor(
+    ROI_name_final,
+    levels = c(
+      'supramarginal_L',
+      'supramarginal_R',
+      'superiortemporal_L',
+      'superiortemporal_R',
+      'antParietal_bilateral',
+      'precentral_inferiorfrontal_R',
+      'V1_bilateral',
+      'MT_bilateral'
+    )
+  ), nrow = 4) +
+  ylab('Cope value, run 2') +
+  xlab('Cope value, run 1') +
+  geom_text(
+    data = reliability,
+    mapping = aes(
+      label = paste(star, "τ=", round(tau_spearman_brown, 3)),
+      x = 8,
+      y = 18
+    ),
+    size = 4,
+    colour = "black",
+    # family = "serif",
+    # inherit.aes = FALSE
+  ) 
+```
+
+```{r}
+plot1 | plot2 + plot_annotation(tag_levels = 'A')
+```
+
