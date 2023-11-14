@@ -271,8 +271,8 @@ report <- function(table, places, tails, flip) {
         p,
         ", ",
         howmanytails,
-        ", d = ",
-        round(table$d, places),
+        # ", d = ",
+        # round(table$d, places),
         ", BF ",
         BF,
         sep = ""
@@ -290,8 +290,8 @@ report <- function(table, places, tails, flip) {
         p,
         ", ",
         howmanytails,
-        ", d = ",
-        round(table$d, places),
+        # ", d = ",
+        # round(table$d, places),
         ", BF ",
         1/BF,
         sep = ""
@@ -401,8 +401,8 @@ report_singlebetas <- function(table, places, tails, flip) {
         p,
         ", ",
         howmanytails,
-        ", d = ",
-        round(table$d, places),
+        # ", d = ",
+        # round(table$d, places),
         # ", BF = ",
         # round(table$BF, places),
         sep = ""
@@ -420,8 +420,8 @@ report_singlebetas <- function(table, places, tails, flip) {
         p,
         ", ",
         howmanytails,
-        ", d = ",
-        round(table$d, places),
+        # ", d = ",
+        # round(table$d, places),
         # ", BF = ",
         # round(table$BF, places),
         sep = ""
