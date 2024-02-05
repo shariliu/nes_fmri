@@ -151,8 +151,7 @@ summary_domain <-
 # (2) Set up multivariate data
 
 ```{r}
-
-study1.data <- read_rds(here("outputs", "univariate_data", "study1_univariate_data_allvoxelN.Rds")) %>% 
+study1.data <- read_rds(here("outputs", "univariate_data", "study1_univariate_data_singlebetas.Rds")) %>% 
   filter(extracted_run_number == "run1",
          top_n_voxels == 100) # run1 only
 
